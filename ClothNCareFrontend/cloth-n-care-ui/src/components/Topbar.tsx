@@ -1,4 +1,6 @@
+import { useLocation } from "react-router-dom";
 import "./DashboardShell.css";
+import Icon from "./Icons";
 import { getLanUrl } from "../utils/network";
 
 interface TokenClaims {
@@ -29,35 +31,71 @@ const decodeTokenClaims = (token: string): TokenClaims | null => {
   }
 };
 
+const pageTitles: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/orders": "Orders",
+  "/customers": "Customers",
+  "/services": "Services",
+  "/reports": "Reports",
+  "/expenses": "Expenses",
+  "/settings": "Settings",
+};
+
+const getInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
 export default function Topbar() {
+  const location = useLocation();
   const token = localStorage.getItem("token");
   const user = token ? decodeTokenClaims(token) : null;
   const displayName = user?.name ?? user?.sub ?? "Current user";
+  const initials = getInitials(displayName);
+  const role = user?.role ?? "STAFF";
   const lanUrl = getLanUrl();
+
+  const title = pageTitles[location.pathname] ?? "Cloth n Care";
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("role");
     window.location.href = "/";
   };
 
   return (
     <header className="topbar">
-      <h2>Dashboard</h2>
+      <div className="topbar-title">
+        <h2>{title}</h2>
+      </div>
 
-      <div className="topbar-account">
-        <div className="network-summary" title={lanUrl}>
-          <span className="network-summary-label">Network URL</span>
-          <span className="network-summary-url">{lanUrl}</span>
+      <div className="topbar-actions">
+        <a className="topbar-network" href={lanUrl} title={lanUrl}>
+          <span className="topbar-network-dot" />
+          <span className="topbar-network-label">LAN Access</span>
+        </a>
+
+        <div className="topbar-user">
+          <span className="avatar" aria-hidden="true">
+            {initials}
+          </span>
+          <div className="topbar-user-text">
+            <span className="topbar-user-name">{displayName}</span>
+            <span className="topbar-user-role">{role}</span>
+          </div>
         </div>
 
-        <div className="user-summary" title={user?.sub}>
-          <span className="user-summary-label">Signed in as</span>
-          <span className="user-summary-name">{displayName}</span>
-          {user?.role ? <span className="user-summary-role">{user.role}</span> : null}
-        </div>
-
-        <button type="button" onClick={handleLogout} className="logout-button">
-          Logout
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="icon-button logout-button"
+          title="Logout"
+        >
+          <Icon name="logout" size={18} />
+          <span className="logout-button-label">Logout</span>
         </button>
       </div>
     </header>

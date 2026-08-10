@@ -22,6 +22,10 @@ public class Customer {
 
     private String email;
 
+    private String address;
+
+    private String notes;
+
     private LocalDateTime created_at;
 
 }

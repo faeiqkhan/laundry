@@ -20,7 +20,7 @@ public class JwtUtil {
 
     private static final long EXPIRATION = 1000 * 60 * 60 * 24; // 24 hours
 
-    @Value("${spring.config.JWT_SECRET_KEY:${JWT_SECRET_KEY:}}")
+    @Value("${jwt.secret:${JWT_SECRET_KEY:}}")
     private String jwtSecretKey;
 
     @PostConstruct

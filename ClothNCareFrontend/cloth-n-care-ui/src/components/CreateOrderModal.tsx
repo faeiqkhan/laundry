@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 import {
   createCustomer,
   getCustomers,
@@ -7,6 +6,7 @@ import {
 } from "../api/customers";
 import { getServices, type Service } from "../api/services";
 import { createOrder } from "../api/orders";
+import Icon from "./Icons";
 import "./DashboardShell.css";
 
 interface Props {
@@ -33,9 +33,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [filtered, setFiltered] = useState<Customer[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null,
-  );
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
@@ -46,6 +44,10 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
+  const [discount, setDiscount] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
 
   const activeServices = services.filter((service) => service.active);
   const serviceNames = uniqueValues(
@@ -168,6 +170,12 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
       return;
     }
 
+    const discountNum = discount ? Number(discount) : 0;
+    if (Number.isNaN(discountNum) || discountNum < 0) {
+      alert("Please enter a valid discount amount");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -175,21 +183,15 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
         customerId: selectedCustomer.id,
         phone: selectedCustomer.phone,
         items,
-        expected_delivery_date: new Date().toISOString().split("T")[0],
+        expected_delivery_date: deliveryDate,
+        discount: discountNum,
       });
 
       onSuccess();
       onClose();
     } catch (err) {
       console.error(err);
-
-      const message =
-        axios.isAxiosError<{ message?: string }>(err) &&
-        err.response?.data?.message
-          ? err.response.data.message
-          : "Failed to create order";
-
-      alert(message);
+      alert("Failed to create order");
     } finally {
       setLoading(false);
     }
@@ -198,195 +200,238 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
   return (
     <div className="modal-backdrop" role="presentation">
       <section
-        className="create-order-modal"
+        className="modal modal-wide"
         aria-labelledby="create-order-title"
         role="dialog"
         aria-modal="true"
       >
-        <h2 id="create-order-title">Create Order</h2>
+        <div className="modal-header">
+          <div>
+            <h2 id="create-order-title">Create Order</h2>
+            <p>Select a customer and add services to the order</p>
+          </div>
+          <button type="button" className="icon-button icon-only" onClick={onClose}>
+            <Icon name="close" size={18} />
+          </button>
+        </div>
 
-        <div className="customer-search">
-          <input
-            placeholder="Search customer (name or phone)"
-            className="modal-input"
-            value={search}
-            onChange={(event) => handleSearch(event.target.value)}
-            onFocus={() => setShowDropdown(true)}
-          />
+        <div className="modal-body">
+          <div className="form-field">
+            <label>Customer</label>
+            <div className="customer-search">
+              <input
+                placeholder="Search customer (name or phone)"
+                className="form-input"
+                value={search}
+                onChange={(event) => handleSearch(event.target.value)}
+                onFocus={() => setShowDropdown(true)}
+              />
 
-          {showDropdown && filtered.length > 0 && (
-            <div className="customer-dropdown">
-              {filtered.map((customer) => (
+              {showDropdown && filtered.length > 0 && (
+                <div className="customer-dropdown">
+                  {filtered.map((customer) => (
+                    <button
+                      key={customer.id}
+                      type="button"
+                      className="customer-option"
+                      onClick={() => {
+                        setSelectedCustomer(customer);
+                        setSearch(`${customer.name} - ${customer.phone}`);
+                        setShowDropdown(false);
+                      }}
+                    >
+                      {customer.name} - {customer.phone}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {showDropdown && search.trim() && filtered.length === 0 && (
+                <div className="customer-dropdown no-results-dropdown">
+                  <p className="no-results-text">No customer found</p>
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => {
+                      setShowAddCustomer(true);
+                      setShowDropdown(false);
+                      setNewCustomer((currentCustomer) => ({
+                        ...currentCustomer,
+                        name: search.trim(),
+                        phone: "",
+                      }));
+                    }}
+                  >
+                    + Add New Customer
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {showAddCustomer && (
+            <div className="new-customer-panel">
+              <h3>New Customer</h3>
+              <div className="new-customer-grid">
+                <input
+                  placeholder="Name"
+                  className="form-input"
+                  value={newCustomer.name}
+                  onChange={(event) =>
+                    setNewCustomer((currentCustomer) => ({
+                      ...currentCustomer,
+                      name: event.target.value,
+                    }))
+                  }
+                />
+
+                <input
+                  placeholder="Phone"
+                  className="form-input"
+                  value={newCustomer.phone}
+                  onChange={(event) =>
+                    setNewCustomer((currentCustomer) => ({
+                      ...currentCustomer,
+                      phone: event.target.value,
+                    }))
+                  }
+                />
+
+                <input
+                  placeholder="Email (optional)"
+                  type="email"
+                  className="form-input"
+                  value={newCustomer.email}
+                  onChange={(event) =>
+                    setNewCustomer((currentCustomer) => ({
+                      ...currentCustomer,
+                      email: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="new-customer-actions">
                 <button
-                  key={customer.id}
                   type="button"
-                  className="customer-option"
+                  className="btn btn-secondary btn-sm"
                   onClick={() => {
-                    setSelectedCustomer(customer);
-                    setSearch(`${customer.name} - ${customer.phone}`);
-                    setShowDropdown(false);
+                    setShowAddCustomer(false);
+                    setNewCustomer({ name: "", phone: "", email: "" });
                   }}
+                  disabled={creatingCustomer}
                 >
-                  {customer.name} - {customer.phone}
+                  Cancel
                 </button>
+
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleCreateCustomer}
+                  disabled={creatingCustomer}
+                >
+                  {creatingCustomer ? "Saving..." : "Save Customer"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="form-field">
+            <label>Services</label>
+            <div className="modal-items">
+              {items.map((item, index) => (
+                <div key={index} className="modal-item-row">
+                  <select
+                    className="form-input"
+                    value={item.service_type}
+                    onChange={(event) => {
+                      updateItem(index, "service_type", event.target.value);
+                      updateItem(index, "product_type", "");
+                    }}
+                  >
+                    <option value="">Select Service</option>
+                    {serviceNames.map((serviceName) => (
+                      <option key={serviceName} value={serviceName}>
+                        {serviceName}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    className="form-input"
+                    value={item.product_type}
+                    onChange={(event) =>
+                      updateItem(index, "product_type", event.target.value)
+                    }
+                    disabled={!item.service_type}
+                  >
+                    <option value="">Select Product</option>
+                    {activeServices
+                      .filter((service) => service.name === item.service_type)
+                      .map((service) => (
+                        <option key={service.id} value={service.productType}>
+                          {service.productType}
+                        </option>
+                      ))}
+                  </select>
+
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-input quantity-input"
+                    value={item.quantity}
+                    onChange={(event) =>
+                      updateItem(index, "quantity", Number(event.target.value))
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => removeItem(index)}
+                    disabled={items.length === 1}
+                  >
+                    <Icon name="trash" size={15} />
+                  </button>
+                </div>
               ))}
             </div>
-          )}
 
-          {showDropdown && search.trim() && filtered.length === 0 && (
-            <div className="customer-dropdown no-results-dropdown">
-              <p className="no-results-text">No customer found</p>
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => {
-                  setShowAddCustomer(true);
-                  setShowDropdown(false);
-                  setNewCustomer((currentCustomer) => ({
-                    ...currentCustomer,
-                    name: search.trim(),
-                    phone: "",
-                  }));
-                }}
-              >
-                + Add New Customer
-              </button>
-            </div>
-          )}
-        </div>
+            <button type="button" onClick={addItem} className="link-button">
+              + Add Item
+            </button>
+          </div>
 
-        {showAddCustomer && (
-          <section className="new-customer-panel">
-            <h3>New Customer</h3>
-            <div className="new-customer-grid">
+          <div className="form-grid">
+            <div className="form-field">
+              <label htmlFor="order-discount">Discount ({`\u20b9`})</label>
               <input
-                placeholder="Name"
-                className="modal-input"
-                value={newCustomer.name}
-                onChange={(event) =>
-                  setNewCustomer((currentCustomer) => ({
-                    ...currentCustomer,
-                    name: event.target.value,
-                  }))
-                }
-              />
-
-              <input
-                placeholder="Phone"
-                className="modal-input"
-                value={newCustomer.phone}
-                onChange={(event) =>
-                  setNewCustomer((currentCustomer) => ({
-                    ...currentCustomer,
-                    phone: event.target.value,
-                  }))
-                }
-              />
-
-              <input
-                placeholder="Email"
-                type="email"
-                className="modal-input"
-                value={newCustomer.email}
-                onChange={(event) =>
-                  setNewCustomer((currentCustomer) => ({
-                    ...currentCustomer,
-                    email: event.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            <div className="new-customer-actions">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => {
-                  setShowAddCustomer(false);
-                  setNewCustomer({ name: "", phone: "", email: "" });
-                }}
-                disabled={creatingCustomer}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleCreateCustomer}
-                disabled={creatingCustomer}
-              >
-                {creatingCustomer ? "Saving..." : "Save Customer"}
-              </button>
-            </div>
-          </section>
-        )}
-
-        <div className="modal-items">
-          {items.map((item, index) => (
-            <div key={index} className="modal-item-row">
-              <select
-                className="modal-input"
-                value={item.service_type}
-                onChange={(event) => {
-                  updateItem(index, "service_type", event.target.value);
-                  updateItem(index, "product_type", "");
-                }}
-              >
-                <option value="">Select Service</option>
-                {serviceNames.map((serviceName) => (
-                  <option key={serviceName} value={serviceName}>
-                    {serviceName}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                className="modal-input"
-                value={item.product_type}
-                onChange={(event) =>
-                  updateItem(index, "product_type", event.target.value)
-                }
-                disabled={!item.service_type}
-              >
-                <option value="">Select Product</option>
-                {activeServices
-                  .filter((service) => service.name === item.service_type)
-                  .map((service) => (
-                    <option key={service.id} value={service.productType}>
-                      {service.productType}
-                    </option>
-                  ))}
-              </select>
-
-              <input
+                id="order-discount"
                 type="number"
-                min="1"
-                className="modal-input quantity-input"
-                value={item.quantity}
-                onChange={(event) =>
-                  updateItem(index, "quantity", Number(event.target.value))
-                }
+                min="0"
+                step="0.01"
+                className="form-input"
+                placeholder="0.00"
+                value={discount}
+                onChange={(event) => setDiscount(event.target.value)}
               />
-
-              <button
-                type="button"
-                className="icon-text-button"
-                onClick={() => removeItem(index)}
-                disabled={items.length === 1}
-              >
-                Remove
-              </button>
             </div>
-          ))}
-        </div>
 
-        <button type="button" onClick={addItem} className="link-button">
-          + Add Item
-        </button>
+            <div className="form-field">
+              <label htmlFor="order-delivery">Expected Delivery Date</label>
+              <input
+                id="order-delivery"
+                type="date"
+                className="form-input"
+                value={deliveryDate}
+                onChange={(event) => setDeliveryDate(event.target.value)}
+              />
+            </div>
+          </div>
+        </div>
 
         <div className="modal-actions">
-          <button type="button" onClick={onClose} className="secondary-button">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
             Cancel
           </button>
 
@@ -394,9 +439,9 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
             type="button"
             onClick={handleSubmit}
             disabled={loading}
-            className="primary-button"
+            className="btn btn-primary"
           >
-            {loading ? "Saving..." : "Create Order"}
+            {loading ? "Creating..." : "Create Order"}
           </button>
         </div>
       </section>

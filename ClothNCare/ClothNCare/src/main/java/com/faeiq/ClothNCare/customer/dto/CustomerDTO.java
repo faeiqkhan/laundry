@@ -2,7 +2,6 @@ package com.faeiq.ClothNCare.customer.dto;
 
 import lombok.Data;
 
-import java.time.LocalDateTime;
 @Data
 public class CustomerDTO {
 
@@ -11,4 +10,8 @@ public class CustomerDTO {
     private String phone;
 
     private String email;
+
+    private String address;
+
+    private String notes;
 }

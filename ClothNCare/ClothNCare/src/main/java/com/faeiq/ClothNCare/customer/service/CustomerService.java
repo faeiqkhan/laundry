@@ -1,15 +1,20 @@
 package com.faeiq.ClothNCare.customer.service;
 
 import com.faeiq.ClothNCare.common.exception.ConflictException;
+import com.faeiq.ClothNCare.common.exception.ResourceNotFoundException;
 import com.faeiq.ClothNCare.customer.dto.CustomerDTO;
+import com.faeiq.ClothNCare.customer.dto.CustomerDetailDTO;
 import com.faeiq.ClothNCare.customer.dto.CustomerResponseDTO;
 import com.faeiq.ClothNCare.customer.dto.CustomerSummaryDTO;
 import com.faeiq.ClothNCare.customer.entity.Customer;
 import com.faeiq.ClothNCare.customer.repository.CustomerRepository;
+import com.faeiq.ClothNCare.orders.entity.Orders;
+import com.faeiq.ClothNCare.orders.repository.OrdersRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,22 +23,33 @@ import java.util.List;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final OrdersRepository ordersRepository;
 
     @Transactional
     public CustomerResponseDTO createCustomer(CustomerDTO customerDTO) {
-        Customer customer = customerRepository.findByPhone(customerDTO.getPhone());
-
-        if (customer != null) {
-            throw new ConflictException("Customer already exists");
+        if (customerRepository.findByPhone(customerDTO.getPhone()) != null) {
+            throw new ConflictException("Customer with this phone already exists");
         }
 
         Customer newCustomer = new Customer();
-        newCustomer.setName(customerDTO.getName());
-        newCustomer.setEmail(customerDTO.getEmail());
-        newCustomer.setPhone(customerDTO.getPhone());
+        apply(newCustomer, customerDTO);
         newCustomer.setCreated_at(LocalDateTime.now());
 
         return toResponse(customerRepository.save(newCustomer));
+    }
+
+    @Transactional
+    public CustomerResponseDTO updateCustomer(String id, CustomerDTO customerDTO) {
+        Customer customer = customerRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+        Customer existing = customerRepository.findByPhone(customerDTO.getPhone());
+        if (existing != null && !existing.getId().equals(id)) {
+            throw new ConflictException("Customer with this phone already exists");
+        }
+
+        apply(customer, customerDTO);
+        return toResponse(customer);
     }
 
     @Transactional(readOnly = true)
@@ -50,12 +66,47 @@ public class CustomerService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public CustomerDetailDTO getCustomerDetail(String id) {
+        Customer customer = customerRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+        List<Orders> orders = ordersRepository.findByCustomerId(id);
+        BigDecimal totalSpent = orders.stream()
+                .filter(o -> o.getTotal_price() != null)
+                .map(Orders::getTotal_price)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return new CustomerDetailDTO(
+                customer.getId(),
+                customer.getName(),
+                customer.getPhone(),
+                customer.getEmail(),
+                customer.getAddress(),
+                customer.getNotes(),
+                customer.getCreated_at(),
+                orders.size(),
+                totalSpent,
+                List.of()
+        );
+    }
+
+    private void apply(Customer customer, CustomerDTO dto) {
+        customer.setName(dto.getName());
+        customer.setPhone(dto.getPhone());
+        customer.setEmail(dto.getEmail());
+        customer.setAddress(dto.getAddress());
+        customer.setNotes(dto.getNotes());
+    }
+
     private CustomerResponseDTO toResponse(Customer customer) {
         return new CustomerResponseDTO(
                 customer.getId(),
                 customer.getName(),
                 customer.getPhone(),
                 customer.getEmail(),
+                customer.getAddress(),
+                customer.getNotes(),
                 customer.getCreated_at()
         );
     }

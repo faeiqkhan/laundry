@@ -1,0 +1,8 @@
+# Local build / release output
+release/
+
+# Bundled portable Java runtime (downloaded once, not committed)
+jre-staging/
+
+# JWT secret generated on first run (client machine)
+jwt-secret.txt

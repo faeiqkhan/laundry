@@ -6,6 +6,8 @@ import com.faeiq.ClothNCare.common.ApiResponse;
 import com.faeiq.ClothNCare.common.ApiResponseUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,5 +24,12 @@ public class InvoiceController {
     public ResponseEntity<ApiResponse<InvoiceResponseDTO>> generateInvoice(@PathVariable String orderId) {
         InvoiceResponseDTO invoice = invoiceService.generateInvoice(orderId);
         return ResponseEntity.ok(ApiResponseUtil.success(invoice, "Invoice generated successfully"));
+    }
+
+    @DeleteMapping("/{orderId}")
+    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
+    public ResponseEntity<ApiResponse<Void>> deleteInvoice(@PathVariable String orderId) {
+        invoiceService.deleteInvoice(orderId);
+        return ResponseEntity.ok(ApiResponseUtil.success(null, "Invoice deleted successfully"));
     }
 }

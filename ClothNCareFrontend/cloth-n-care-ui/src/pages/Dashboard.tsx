@@ -6,6 +6,7 @@ import {
   type AnalyticsData,
 } from "../api/dashboard";
 import DashboardLayout from "../layout/DashboardLayout";
+import Icon from "../components/Icons";
 import {
   BarChart,
   Bar,
@@ -23,8 +24,17 @@ import {
   Legend,
 } from "recharts";
 import { isAdmin } from "../utils/auth";
+import { formatMoneyShort } from "../utils/format";
 
-const COLORS = ["#2563eb", "#16a34a", "#d97706", "#ef4444", "#7c3aed", "#6b7280"];
+const COLORS = [
+  "#4f46e5",
+  "#059669",
+  "#d97706",
+  "#dc2626",
+  "#7c3aed",
+  "#0d9488",
+  "#e11d48",
+];
 
 export default function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary>({
@@ -69,7 +79,7 @@ export default function Dashboard() {
   if (loading) {
     return (
       <DashboardLayout>
-        <div>Loading...</div>
+        <div className="empty-state">Loading dashboard...</div>
       </DashboardLayout>
     );
   }
@@ -90,151 +100,201 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
+      <div className="page-header">
+        <div className="page-header-text">
+          <h1>Dashboard</h1>
+          <p>Overview of today's activity and business analytics</p>
+        </div>
+      </div>
+
       <div className="stats-grid">
-        <div className="stat-card">
-          <h3>Today Orders</h3>
-          <p>{summary.todayOrders}</p>
+        <div className="stat-card primary">
+          <div className="stat-card-top">
+            <h3>Today's Orders</h3>
+            <div className="stat-card-icon">
+              <Icon name="orders" size={20} />
+            </div>
+          </div>
+          <div className="stat-card-value">{summary.todayOrders}</div>
+          <div className="stat-card-sub">Orders received today</div>
         </div>
 
-        <div className="stat-card">
-          <h3>Revenue</h3>
-          <p>{"\u20b9"}{summary.todayRevenue}</p>
+        <div className="stat-card success">
+          <div className="stat-card-top">
+            <h3>Today's Revenue</h3>
+            <div className="stat-card-icon">
+              <Icon name="money" size={20} />
+            </div>
+          </div>
+          <div className="stat-card-value">
+            {formatMoneyShort(summary.todayRevenue)}
+          </div>
+          <div className="stat-card-sub">Revenue generated today</div>
         </div>
 
-        <div className="stat-card">
-          <h3>Pending</h3>
-          <p>{summary.pendingOrders}</p>
+        <div className="stat-card warning">
+          <div className="stat-card-top">
+            <h3>Pending Orders</h3>
+            <div className="stat-card-icon">
+              <Icon name="clock" size={20} />
+            </div>
+          </div>
+          <div className="stat-card-value">{summary.pendingOrders}</div>
+          <div className="stat-card-sub">Waiting to be processed</div>
         </div>
       </div>
 
       {admin && analytics && (
         <>
-          <div className="analytics-section">
-            <h2 className="section-title">Analytics</h2>
+          <div className="section-title">
+            <Icon name="reports" size={18} />
+            Analytics
+          </div>
 
-            <div className="analytics-kpi-grid">
-              <div className="kpi-card">
-                <span className="kpi-label">Total Orders</span>
-                <span className="kpi-value">{analytics.totalOrders}</span>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">Total Revenue</span>
-                <span className="kpi-value">{"\u20b9"}{Math.round(analytics.totalRevenue)}</span>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">Avg Order Value</span>
-                <span className="kpi-value">{"\u20b9"}{Math.round(analytics.avgOrderValue)}</span>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">Conversion Rate</span>
-                <span className="kpi-value">{analytics.conversionRate.toFixed(1)}%</span>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">Total Customers</span>
-                <span className="kpi-value">{analytics.totalCustomers}</span>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">Retention Rate</span>
-                <span className="kpi-value">{analytics.retentionRate}%</span>
-              </div>
-
-              <div className="kpi-card">
-                <span className="kpi-label">Projected Revenue</span>
-                <span className="kpi-value projected">{"\u20b9"}{Math.round(analytics.projectedRevenue)}</span>
-              </div>
+          <div className="kpi-grid">
+            <div className="kpi-card">
+              <span className="kpi-label">Total Orders</span>
+              <span className="kpi-value">{analytics.totalOrders}</span>
             </div>
 
-            <div className="charts-grid">
-              <div className="chart-card">
-                <h3 className="chart-title">Revenue by Service</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={revenueByServiceData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value: unknown) => {
-                        const num = typeof value === "number" ? value : 0;
-                        return [`\u20b9${num}`, "Revenue"];
-                      }}
-                      contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb" }}
-                    />
-                    <Bar dataKey="value" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Total Revenue</span>
+              <span className="kpi-value accent">
+                {formatMoneyShort(analytics.totalRevenue)}
+              </span>
+            </div>
 
-              <div className="chart-card">
-                <h3 className="chart-title">Orders by Status</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={statusChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }: { name?: string; percent?: number }) =>
-                        `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
-                      }
-                      outerRadius={90}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {statusChartData.map((_entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={COLORS[index % COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Avg Order Value</span>
+              <span className="kpi-value">
+                {formatMoneyShort(analytics.avgOrderValue)}
+              </span>
+            </div>
 
-              <div className="chart-card full-width">
-                <h3 className="chart-title">Daily Revenue Trend</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={analytics.dailyRevenue}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip
-                      formatter={(value: unknown, name: unknown) => {
-                        const num = typeof value === "number" ? value : 0;
-                        const label = typeof name === "string" ? name : "";
-                        return [
-                          label === "revenue" ? `\u20b9${num}` : num,
-                          label === "revenue" ? "Revenue" : "Orders",
-                        ];
-                      }}
-                      contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb" }}
-                    />
-                    <Legend />
-                    <Area
-                      type="monotone"
-                      dataKey="revenue"
-                      stroke="#2563eb"
-                      fill="#2563eb"
-                      fillOpacity={0.15}
-                      name="Revenue"
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="orders"
-                      stroke="#16a34a"
-                      strokeWidth={2}
-                      dot={{ r: 4 }}
-                      name="Orders"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+            <div className="kpi-card">
+              <span className="kpi-label">Conversion Rate</span>
+              <span className="kpi-value good">
+                {analytics.conversionRate.toFixed(1)}%
+              </span>
+            </div>
+
+            <div className="kpi-card">
+              <span className="kpi-label">Total Customers</span>
+              <span className="kpi-value">{analytics.totalCustomers}</span>
+            </div>
+
+            <div className="kpi-card">
+              <span className="kpi-label">Retention Rate</span>
+              <span className="kpi-value">
+                {analytics.retentionRate}%
+              </span>
+            </div>
+
+            <div className="kpi-card">
+              <span className="kpi-label">Projected Revenue (30d)</span>
+              <span className="kpi-value accent">
+                {formatMoneyShort(analytics.projectedRevenue)}
+              </span>
+            </div>
+          </div>
+
+          <div className="charts-grid">
+            <div className="chart-card">
+              <h3 className="chart-title">Revenue by Service</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={revenueByServiceData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value: unknown) => {
+                      const num = typeof value === "number" ? value : 0;
+                      return [formatMoneyShort(num), "Revenue"];
+                    }}
+                    contentStyle={{
+                      borderRadius: 10,
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 8px 24px rgba(15,23,42,.1)",
+                    }}
+                  />
+                  <Bar
+                    dataKey="value"
+                    fill="#4f46e5"
+                    radius={[6, 6, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="chart-card">
+              <h3 className="chart-title">Orders by Status</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={statusChartData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }: { name?: string; percent?: number }) =>
+                      `${name ?? ""} ${((percent ?? 0) * 100).toFixed(0)}%`
+                    }
+                    outerRadius={90}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {statusChartData.map((_entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="chart-card full-width">
+              <h3 className="chart-title">Daily Revenue & Orders Trend (7 days)</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <AreaChart data={analytics.dailyRevenue}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value: unknown, name: unknown) => {
+                      const num = typeof value === "number" ? value : 0;
+                      const label = typeof name === "string" ? name : "";
+                      return [
+                        label === "revenue" ? formatMoneyShort(num) : num,
+                        label === "revenue" ? "Revenue" : "Orders",
+                      ];
+                    }}
+                    contentStyle={{
+                      borderRadius: 10,
+                      border: "1px solid #e2e8f0",
+                      boxShadow: "0 8px 24px rgba(15,23,42,.1)",
+                    }}
+                  />
+                  <Legend />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#4f46e5"
+                    fill="#4f46e5"
+                    fillOpacity={0.12}
+                    name="Revenue"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="orders"
+                    stroke="#059669"
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    name="Orders"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </>

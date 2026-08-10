@@ -1,7 +1,9 @@
 import axios from "axios";
 
 const isDev = window.location.port === "5173";
-const baseURL = isDev ? `${window.location.protocol}//${window.location.hostname}:8080` : "";
+const baseURL = isDev
+  ? `${window.location.protocol}//${window.location.hostname}:8080/api`
+  : "/api";
 
 const api = axios.create({
   baseURL,

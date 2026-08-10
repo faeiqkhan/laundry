@@ -50,9 +50,11 @@ public class SecurityConfig {
                 // ✅ Authorization rules
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public endpoints
+                        // Public endpoints. All data APIs live behind /api/** and the
+                        // invoice files behind /invoices/**, which stay authenticated.
+                        // The SPA routes below serve only the static HTML shell.
                         .requestMatchers(
-                                "/auth/**",
+                                "/api/auth/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
@@ -61,10 +63,34 @@ public class SecurityConfig {
                                 "/",
                                 "/index.html",
                                 "/assets/**",
-                                "/favicon.ico"
+                                "/favicon.ico",
+                                "/favicon.svg",
+                                "/error",
+                                "/dashboard",
+                                "/orders",
+                                "/customers",
+                                "/services",
+                                "/register",
+                                "/reports",
+                                "/expenses",
+                                "/settings",
+                                "/staff",
+                                "/products",
+                                "/expense-heads",
+                                "/additional-charges",
+                                "/storage-bags",
+                                "/storage-racks",
+                                "/price-lists",
+                                "/create-price-list",
+                                "/pos",
+                                "/delivery-orders",
+                                "/invoices",
+                                "/collection",
+                                "/payments",
+                                "/multi-expense",
+                                "/analytical-dashboard",
+                                "/yearly-dashboard"
                         ).permitAll()
-
-                        .requestMatchers(HttpMethod.GET, "/invoices/**").permitAll()
 
                         // Allow preflight (important for frontend)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()

@@ -32,10 +32,26 @@ public class Orders {
     @OneToMany(mappedBy = "orders", cascade = CascadeType.ALL)
     private List<OrdersItems> items;
 
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    private List<Payment> payments;
+
     private BigDecimal total_price;
+
+    private BigDecimal discount = BigDecimal.ZERO;
+
+    private BigDecimal tax_amount = BigDecimal.ZERO;
+
+    private BigDecimal paid_amount = BigDecimal.ZERO;
+
+    private String invoice_number;
 
     private LocalDate expected_delivery_date;
 
     private LocalDateTime created_at;
 
+    public BigDecimal getBalanceDue() {
+        BigDecimal paid = paid_amount == null ? BigDecimal.ZERO : paid_amount;
+        BigDecimal total = total_price == null ? BigDecimal.ZERO : total_price;
+        return total.subtract(paid).max(BigDecimal.ZERO);
+    }
 }

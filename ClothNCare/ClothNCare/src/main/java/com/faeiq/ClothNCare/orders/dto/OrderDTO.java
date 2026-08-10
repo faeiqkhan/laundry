@@ -3,6 +3,7 @@ package com.faeiq.ClothNCare.orders.dto;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -18,4 +19,6 @@ public class OrderDTO {
 
     @JsonAlias("expected_delivery_date")
     private LocalDate expectedDeliveryDate;
+
+    private BigDecimal discount = BigDecimal.ZERO;
 }

@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# WhatsApp session credentials (never commit)
+server/auth_info/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

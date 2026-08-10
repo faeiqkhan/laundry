@@ -3,9 +3,6 @@ spring:
     url: jdbc:sqlite:file:./data/clothncare.db?foreign_keys=on
     driver-class-name: org.sqlite.JDBC
 
-  config:
-    JWT_SECRET_KEY: $6uP+yBGvet!f5w&Wtdk}9Em^UjHiT>5e${cPq3<9^0
-
   jpa:
     database-platform: org.hibernate.community.dialect.SQLiteDialect
     hibernate:
@@ -16,3 +13,8 @@ spring:
         format_sql: true
   application:
     name: ClothNCare
+
+# Secret must be at least 32 chars. Set the JWT_SECRET_KEY environment
+# variable when running (never commit a real secret to the repository).
+jwt:
+  secret: ${JWT_SECRET_KEY:}

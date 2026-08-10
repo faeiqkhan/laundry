@@ -7,6 +7,7 @@ import com.faeiq.ClothNCare.auth.security.JwtUtil;
 import com.faeiq.ClothNCare.common.exception.ConflictException;
 import com.faeiq.ClothNCare.common.exception.ResourceNotFoundException;
 import com.faeiq.ClothNCare.common.exception.UnauthorizedException;
+import com.faeiq.ClothNCare.user.entity.Role;
 import com.faeiq.ClothNCare.user.entity.Users;
 import com.faeiq.ClothNCare.user.repository.UsersRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,10 +33,15 @@ public class AuthService {
         Users user = new Users();
         user.setEmail(registerDTO.getEmail());
         user.setName(registerDTO.getName());
-        user.setRole(registerDTO.getRole());
+        user.setRole(safeRegisterRole(registerDTO.getRole()));
         user.setPassword(encoder.encode(registerDTO.getPassword()));
 
         usersRepository.save(user);
+    }
+
+    private Role safeRegisterRole(Role requestedRole) {
+        // Public registration must never be able to self-assign elevated roles.
+        return requestedRole == Role.MANAGER ? Role.MANAGER : Role.STAFF;
     }
 
     @Transactional(readOnly = true)

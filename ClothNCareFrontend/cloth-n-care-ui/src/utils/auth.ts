@@ -30,3 +30,8 @@ export function getUserRole(): string | null {
 export function isAdmin(): boolean {
   return getUserRole() === "ADMIN";
 }
+
+export function canManage(): boolean {
+  const role = getUserRole();
+  return role === "ADMIN" || role === "MANAGER";
+}

@@ -1,0 +1,104 @@
+name: Build Release
+
+# Manual trigger only. Click "Run workflow" on the Actions tab to build the
+# whole app on GitHub and get a ready-to-copy release zip + GitHub Release.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.0.0). Empty = timestamp build."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ClothNCareFrontend/cloth-n-care-ui/package-lock.json
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build frontend
+        working-directory: ClothNCareFrontend/cloth-n-care-ui
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      - name: Copy frontend build into backend static resources
+        run: |
+          rm -rf ClothNCare/ClothNCare/src/main/resources/static/assets/*
+          rm -f ClothNCare/ClothNCare/src/main/resources/static/index.html
+          cp -r ClothNCareFrontend/cloth-n-care-ui/dist/* ClothNCare/ClothNCare/src/main/resources/static/
+
+      - name: Package backend (runs tests)
+        working-directory: ClothNCare/ClothNCare
+        run: ./mvnw -B clean package
+
+      - name: Download Windows x64 JRE 21 (Temurin)
+        run: |
+          curl -fL -o jre.zip "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse"
+          mkdir -p jre-staging jre
+          unzip -q jre.zip -d jre-staging
+          mv jre-staging/jdk-*/jre/* jre/ 2>/dev/null || mv jre-staging/jdk-*/* jre/
+          rm -rf jre-staging jre.zip
+
+      - name: Resolve version
+        id: version
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then VERSION="$(date +%Y.%m.%d-%H%M)"; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble release folder
+        run: |
+          mkdir -p release/data release/invoices
+          cp ClothNCare/ClothNCare/target/ClothNCare-*.jar release/ClothNCare.jar
+          cp scripts/start.bat release/start.bat
+          cp scripts/README-CLIENT.txt release/README-CLIENT.txt
+          cp -r jre release/jre
+          # Ship a fresh empty database + invoices folder (no client data)
+          touch release/data/.gitkeep release/invoices/.gitkeep
+
+      - name: Zip release
+        run: |
+          cd release
+          zip -q -r ../ClothNCare-${{ steps.version.outputs.version }}.zip .
+          cd ..
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClothNCare-${{ steps.version.outputs.version }}
+          path: ClothNCare-${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: release-${{ steps.version.outputs.version }}
+          name: ClothNCare ${{ steps.version.outputs.version }}
+          body: |
+            Release built from `${{ github.sha }}`.
+
+            Download `ClothNCare-${{ steps.version.outputs.version }}.zip`, unzip it
+            on the client PC, and double-click `start.bat`. Java is bundled.
+          files: ClothNCare-${{ steps.version.outputs.version }}.zip
+          fail_on_unmatched_files: true
