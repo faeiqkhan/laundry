@@ -10,6 +10,9 @@ import java.math.BigDecimal;
 public class ProductResponseDTO {
     private String id;
     private String name;
+    private String service;
+    private String category;
+    private int priority;
     private String unit;
     private BigDecimal price;
     private boolean active;

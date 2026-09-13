@@ -147,13 +147,12 @@ public class InvoiceService {
         addItemCell(table, "Total", Element.ALIGN_RIGHT, true);
 
         for (OrdersItems item : order.getItems()) {
-            String desc = item.getService_type()
+            String desc = (item.getProduct_name() != null ? item.getProduct_name() : item.getService_type())
                     + (item.getProduct_type() != null ? " - " + item.getProduct_type() : "");
-            BigDecimal lineTotal = item.getPrice()
-                    .multiply(BigDecimal.valueOf(item.getQuantity()))
+            BigDecimal lineTotal = item.getLineTotal()
                     .setScale(2, RoundingMode.HALF_UP);
             addItemCell(table, desc, Element.ALIGN_LEFT, false);
-            addItemCell(table, String.valueOf(item.getQuantity()), Element.ALIGN_CENTER, false);
+            addItemCell(table, fmtQty(item.getQuantity()), Element.ALIGN_CENTER, false);
             addItemCell(table, fmt(item.getPrice()), Element.ALIGN_RIGHT, false);
             addItemCell(table, fmt(lineTotal), Element.ALIGN_RIGHT, false);
         }
@@ -165,13 +164,13 @@ public class InvoiceService {
     private void buildTotals(Document document, Orders order, AppSettings settings) {
         String symbol = currencySymbol(settings);
 
-        int totalQty = order.getItems().stream()
-                .mapToInt(OrdersItems::getQuantity)
-                .sum();
-        addTotalRow(document, "Total Qty", String.valueOf(totalQty), false);
+        BigDecimal totalQty = order.getItems() == null ? BigDecimal.ZERO : order.getItems().stream()
+                .map(item -> item.getQuantity() == null ? BigDecimal.ZERO : item.getQuantity())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        addTotalRow(document, "Total Qty", fmtQty(totalQty), false);
 
-        BigDecimal subtotal = order.getItems().stream()
-                .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+        BigDecimal subtotal = order.getItems() == null ? BigDecimal.ZERO : order.getItems().stream()
+                .map(item -> item.getLineTotal() == null ? BigDecimal.ZERO : item.getLineTotal())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         addTotalRow(document, "Sub Total", money(subtotal, symbol), false);
 
@@ -297,6 +296,17 @@ public class InvoiceService {
     private String fmt(BigDecimal value) {
         if (value == null) {
             return "0.00";
+        }
+        return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private String fmtQty(BigDecimal value) {
+        if (value == null) {
+            return "0";
+        }
+        BigDecimal stripped = value.stripTrailingZeros();
+        if (stripped.scale() <= 0) {
+            return stripped.toBigInteger().toString();
         }
         return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }

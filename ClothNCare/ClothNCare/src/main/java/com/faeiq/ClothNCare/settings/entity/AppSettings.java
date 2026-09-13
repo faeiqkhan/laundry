@@ -32,4 +32,10 @@ public class AppSettings {
     private String whatsAppWelcomeTemplate = "";
     private String whatsAppInvoiceTemplate = "";
     private String whatsAppStatusTemplate = "";
+    private String whatsAppProvider = "webjs";
+    private boolean whatsAppTestMode = true;
+    private String whatsAppTestNumber = "";
+    private boolean whatsAppAutoWelcome = false;
+    private boolean whatsAppAutoInvoice = false;
+    private boolean whatsAppAutoStatus = false;
 }

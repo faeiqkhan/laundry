@@ -26,6 +26,40 @@ rem its database file if the parent folder is missing).
 if not exist data mkdir data
 if not exist invoices mkdir invoices
 
+rem ------------------------------------------------------------------
+rem Start the WhatsApp service (Node.js / whatsapp-web.js) so that
+rem WhatsApp notifications and invoice messages work.
+rem It is a no-op if Node is missing, the service folder is absent, or
+rem something is already listening on port 3001.
+rem ------------------------------------------------------------------
+echo.
+echo Starting WhatsApp service...
+where node >nul 2>nul
+if errorlevel 1 (
+  echo   [SKIP] Node.js not found - WhatsApp notifications disabled.
+  goto :secret
+)
+set "WA_DIR=whatsapp-service"
+if not exist "%WA_DIR%\src\server.js" (
+  if exist "..\whatsapp-service\src\server.js" set "WA_DIR=..\whatsapp-service"
+)
+if not exist "%WA_DIR%\src\server.js" (
+  echo   [SKIP] whatsapp-service folder not found - WhatsApp notifications disabled.
+  goto :secret
+)
+netstat -ano | findstr /r /c:":3001 .*LISTENING" >nul 2>nul
+if not errorlevel 1 (
+  echo   [OK] WhatsApp service already running on port 3001.
+  goto :secret
+)
+rem Hide the service - no extra cmd window. Output goes to whatsapp-service.log
+rem next to start.bat so it can be checked if something goes wrong.
+start "" /b /d "%~dp0%WA_DIR%" node src\server.js >> "%~dp0whatsapp-service.log" 2>&1
+echo   [OK] WhatsApp service starting in the background on 127.0.0.1:3001.
+echo        If a QR code is required, open Settings -> WhatsApp Connection
+echo        in the app to scan it.
+
+:secret
 if not exist jwt-secret.txt (
   echo First run: generating JWT secret...
   powershell -NoProfile -ExecutionPolicy Bypass -Command "$s=[guid]::NewGuid().ToString()+[guid]::NewGuid().ToString();[System.IO.File]::WriteAllText('jwt-secret.txt',$s)"
@@ -36,6 +70,20 @@ set /p JWT_SECRET_KEY=<jwt-secret.txt
 rem Detect the LAN IP (usually the Wi-Fi adapter) so other devices can open the app.
 set "LAN_IP="
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "$r=Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object RouteMetric | Select-Object -First 1; if ($r) { (Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $r.InterfaceIndex -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress }"`) do set "LAN_IP=%%i"
+
+rem ------------------------------------------------------------------
+rem If the app is already running, do not start a second instance.
+rem ------------------------------------------------------------------
+netstat -ano | findstr /r /c:":8080 .*LISTENING" >nul 2>nul
+if not errorlevel 1 (
+  echo.
+  echo Cloth n Care is already running on port 8080.
+  echo Open http://localhost:8080 in your browser, or stop the existing
+  echo window before starting a new instance.
+  echo.
+  pause
+  exit /b 0
+)
 
 echo.
 echo Starting Cloth n Care...

@@ -13,7 +13,8 @@ export type DataResource =
   | "racks"
   | "charge-types"
   | "users"
-  | "invoices";
+  | "invoices"
+  | "workshop";
 
 export type DataFormat = "xlsx" | "csv";
 
@@ -38,6 +39,7 @@ const fileNames: Record<DataResource, string> = {
   "charge-types": "charge-types",
   users: "users",
   invoices: "invoices",
+  workshop: "workshop",
 };
 
 const dateStamp = (): string => {

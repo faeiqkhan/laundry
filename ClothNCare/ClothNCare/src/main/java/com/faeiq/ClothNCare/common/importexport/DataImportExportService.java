@@ -123,6 +123,7 @@ public class DataImportExportService {
             case "products" -> productsTable();
             case "services" -> servicesTable();
             case "orders", "invoices" -> ordersTable();
+            case "workshop", "workshop-history", "challan" -> workshopTable();
             case "payments" -> paymentsTable();
             case "expenses" -> expensesTable();
             case "expense-heads" -> expenseHeadsTable();
@@ -175,10 +176,13 @@ public class DataImportExportService {
     }
 
     private DataTable productsTable() {
-        List<String> headers = List.of("Name", "Unit", "Price", "Active");
+        List<String> headers = List.of("Name", "Service", "Category", "Priority", "Unit", "Price", "Active");
         List<List<String>> rows = new ArrayList<>();
         productRepository.findAllByOrderByNameAsc().forEach(p -> rows.add(List.of(
                 nullToEmpty(p.getName()),
+                nullToEmpty(p.getService()),
+                nullToEmpty(p.getCategory()),
+                String.valueOf(p.getPriority()),
                 nullToEmpty(p.getUnit()),
                 fmt(p.getPrice()),
                 p.isActive() ? "TRUE" : "FALSE")));
@@ -223,10 +227,57 @@ public class DataImportExportService {
                                 invoice, status, customerName, customerPhone, discount, paid, expected, created,
                                 nullToEmpty(item.getService_type()),
                                 nullToEmpty(item.getProduct_type()),
-                                String.valueOf(item.getQuantity()),
+                                fmtQty(item.getQuantity()),
                                 fmt(item.getPrice()))));
                     }
                 });
+        return new DataTable(headers, rows);
+    }
+
+    private DataTable workshopTable() {
+        List<String> headers = List.of(
+                "Sr No", "Invoice No", "Customer Name", "Invoice Date", "Delivery Date",
+                "Product", "Service", "Qty", "Item Amount", "Discount", "Tax", "Total Amount", "Status");
+        List<List<String>> rows = new ArrayList<>();
+        List<Orders> orders = ordersRepository.findAll().stream()
+                .filter(o -> o.getStatus() != null && o.getStatus() != Status.CANCELLED)
+                .sorted(Comparator.comparing(Orders::getCreated_at, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
+        int srNo = 0;
+        BigDecimal grandTotal = BigDecimal.ZERO;
+        for (Orders order : orders) {
+            if (order.getItems() == null || order.getItems().isEmpty()) {
+                continue;
+            }
+            int itemCount = order.getItems().size();
+            for (int i = 0; i < itemCount; i++) {
+                OrdersItems item = order.getItems().get(i);
+                boolean lastRow = i == itemCount - 1;
+                BigDecimal invoiceTotal = null;
+                if (lastRow) {
+                    invoiceTotal = order.getTotal_price() == null ? BigDecimal.ZERO : order.getTotal_price();
+                    grandTotal = grandTotal.add(invoiceTotal);
+                }
+                String product = item.getProduct_name() != null && !item.getProduct_name().isEmpty()
+                        ? item.getProduct_name()
+                        : item.getProduct_type() == null ? "" : item.getProduct_type();
+                rows.add(List.of(
+                        String.valueOf(++srNo),
+                        nullToEmpty(order.getInvoice_number()),
+                        order.getCustomer() != null ? nullToEmpty(order.getCustomer().getName()) : "",
+                        order.getCreated_at() == null ? "" : order.getCreated_at().format(DATETIME_ISO),
+                        order.getExpected_delivery_date() == null ? "" : order.getExpected_delivery_date().format(DATE_ISO),
+                        product,
+                        nullToEmpty(item.getService_type()),
+                        fmt(item.getQuantity()) + (item.getUom() == null || item.getUom().isEmpty() ? "" : " " + item.getUom()),
+                        fmt(item.getPrice() == null ? null : item.getPrice().multiply(item.getQuantity() == null ? BigDecimal.ONE : item.getQuantity())),
+                        fmt(order.getDiscount()),
+                        fmt(order.getTax_amount()),
+                        invoiceTotal == null ? "" : fmt(invoiceTotal),
+                        order.getStatus() == null ? "" : order.getStatus().name()));
+            }
+        }
+        rows.add(List.of("", "", "", "", "", "Grand Total", "", "", "", "", "", fmt(grandTotal), ""));
         return new DataTable(headers, rows);
     }
 
@@ -367,20 +418,37 @@ public class DataImportExportService {
     }
 
     private void importPriceLists(DataTable t, ImportResult result) {
+        boolean productFormat = t.headers().stream().anyMatch(h -> h.equalsIgnoreCase("Product Name"));
+        boolean hasPriceListName = t.headers().stream().anyMatch(h -> h.equalsIgnoreCase("Price List Name"));
         Map<String, List<PriceListEntryDTO>> grouped = new LinkedHashMap<>();
         Map<String, String> descriptions = new LinkedHashMap<>();
         for (Row row : rows(t)) {
-            String name = row.val("Price List Name");
+            String name = hasPriceListName ? row.val("Price List Name")
+                    : (productFormat ? "Master Price List" : row.val("Price List Name"));
             if (name.isEmpty()) {
                 result.getErrors().add("Price list row skipped: Price List Name is required");
                 continue;
             }
-            String itemName = row.val("Item Name");
-            String itemTypeRaw = row.val("Item Type");
+            String itemName;
+            String itemTypeRaw;
             String priceRaw = row.val("Price");
-            if (itemName.isEmpty() || priceRaw.isEmpty() || itemTypeRaw.isEmpty()) {
-                result.getErrors().add("Price list row skipped: Item Type, Item Name and Price are required");
-                continue;
+            if (productFormat) {
+                String productName = row.val("Product Name");
+                String service = row.val("Service");
+                if (productName.isEmpty() || service.isEmpty() || priceRaw.isEmpty()) {
+                    result.getErrors().add("Price list row skipped: Product Name, Service and Price are required");
+                    continue;
+                }
+                itemName = productName + " - " + service;
+                itemTypeRaw = "PRODUCT";
+                applyCatalogPrice(productName, service, row.val("UOM"), priceRaw, result);
+            } else {
+                itemName = row.val("Item Name");
+                itemTypeRaw = row.val("Item Type");
+                if (itemName.isEmpty() || priceRaw.isEmpty() || itemTypeRaw.isEmpty()) {
+                    result.getErrors().add("Price list row skipped: Item Type, Item Name and Price are required");
+                    continue;
+                }
             }
             PriceListEntry.EntryType itemType;
             try {
@@ -447,15 +515,58 @@ public class DataImportExportService {
         }
     }
 
+    private void applyCatalogPrice(String productName, String service, String uom, String priceRaw, ImportResult result) {
+        BigDecimal price = decimal(priceRaw);
+        if (price == null || price.compareTo(ZERO) < 0) {
+            return;
+        }
+        String base = productName.trim();
+        if (!service.isEmpty()) {
+            int trailing = base.toLowerCase().lastIndexOf("(" + service.toLowerCase() + ")");
+            if (trailing > 0) {
+                base = (base.substring(0, trailing)).trim();
+            }
+        }
+        String category = "";
+        int open = base.indexOf('[');
+        int close = base.indexOf(']');
+        if (open > 0 && close > open) {
+            category = base.substring(open + 1, close).trim();
+            base = (base.substring(0, open) + " " + base.substring(close + 1)).trim();
+        }
+        Product product = productRepository
+                .findByNameIgnoreCaseAndServiceIgnoreCaseAndCategoryIgnoreCase(base, service, category)
+                .orElse(null);
+        if (product == null && !category.isEmpty()) {
+            product = productRepository
+                    .findByNameIgnoreCaseAndServiceIgnoreCaseAndCategoryIgnoreCase(base, service, "")
+                    .orElse(null);
+        }
+        if (product == null) {
+            result.getErrors().add("Price list row skipped: no matching product for '" + productName + "' ("
+                    + service + ", " + (category.isEmpty() ? "no category" : category) + ")");
+            return;
+        }
+        product.setPrice(price);
+        if (!uom.isEmpty()) {
+            product.setUnit(uom.trim());
+        }
+        productRepository.save(product);
+    }
+
     private void importProducts(DataTable t, ImportResult result) {
         Set<String> seen = new HashSet<>();
+        boolean hasService = t.headers().stream().anyMatch(h -> h.equalsIgnoreCase("Service"));
         for (Row row : rows(t)) {
             String name = row.val("Name");
             if (name.isEmpty()) {
                 result.getErrors().add("Product row skipped: Name is required");
                 continue;
             }
-            if (!seen.add(name.trim().toLowerCase())) {
+            String service = hasService ? row.val("Service") : "";
+            String category = row.val("Category").isEmpty() ? row.val("productsubcategory Name") : row.val("Category");
+            String key = (name.trim() + "|" + service.trim() + "|" + category.trim()).toLowerCase();
+            if (!seen.add(key)) {
                 result.setSkipped(result.getSkipped() + 1);
                 continue;
             }
@@ -468,20 +579,33 @@ public class DataImportExportService {
                 continue;
             }
             try {
-                Product existing = productRepository.findByNameIgnoreCase(name).orElse(null);
+                Product existing = productRepository
+                        .findByNameIgnoreCaseAndServiceIgnoreCaseAndCategoryIgnoreCase(name.trim(), service, category)
+                        .orElse(null);
+                if (existing == null && !service.isEmpty() && !category.isEmpty()) {
+                    existing = productRepository
+                            .findByNameIgnoreCaseAndServiceIgnoreCaseAndCategoryIgnoreCase(name.trim(), service, "")
+                            .orElse(null);
+                }
                 if (existing == null) {
                     Product product = new Product();
                     product.setName(name.trim());
-                    product.setUnit(blankToNull(row.val("Unit")));
+                    product.setService(service.isEmpty() ? null : service.trim());
+                    product.setCategory(category.trim().isEmpty() ? null : category.trim());
+                    product.setPriority(intValue(row.val("Priority"), 0));
+                    product.setUnit(blankToNull(rowUnit(row)));
                     product.setPrice(price);
                     product.setActive(bool(row.val("Active"), true));
                     productRepository.save(product);
                     result.setCreated(result.getCreated() + 1);
                 } else {
                     existing.setName(name.trim());
-                    existing.setUnit(blankToNull(row.val("Unit")));
+                    existing.setService(service.isEmpty() ? existing.getService() : service.trim());
+                    existing.setCategory(category.trim().isEmpty() ? existing.getCategory() : category.trim());
+                    existing.setPriority(intValue(row.val("Priority"), existing.getPriority()));
+                    existing.setUnit(blankToNull(rowUnit(row)));
                     existing.setPrice(price);
-                    existing.setActive(bool(row.val("Active"), true));
+                    existing.setActive(bool(row.val("Active"), existing.isActive()));
                     productRepository.save(existing);
                     result.setUpdated(result.getUpdated() + 1);
                 }
@@ -489,6 +613,11 @@ public class DataImportExportService {
                 result.getErrors().add("Product row failed: " + e.getMessage());
             }
         }
+    }
+
+    private String rowUnit(Row row) {
+        String unit = row.val("Unit");
+        return unit.isEmpty() ? row.val("UOM") : unit;
     }
 
     private void importServices(DataTable t, ImportResult result) {
@@ -631,7 +760,7 @@ public class DataImportExportService {
                     OrdersItems item = new OrdersItems();
                     item.setService_type(serviceType);
                     item.setProduct_type(productType);
-                    item.setQuantity(qty);
+                    item.setQuantity(BigDecimal.valueOf(qty));
                     item.setPrice(unitPrice);
                     items.add(item);
                     subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(qty)));
@@ -1063,6 +1192,15 @@ public class DataImportExportService {
 
     private String fmt(BigDecimal value) {
         return value == null ? "0.00" : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private String fmtQty(BigDecimal value) {
+        if (value == null) {
+            return "0";
+        }
+        BigDecimal stripped = value.stripTrailingZeros();
+        return stripped.scale() <= 0 ? stripped.toBigInteger().toString()
+                : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     private BigDecimal decimal(String value) {

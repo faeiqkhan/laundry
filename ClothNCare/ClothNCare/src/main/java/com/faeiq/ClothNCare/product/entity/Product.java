@@ -18,6 +18,12 @@ public class Product {
 
     private String name;
 
+    private String service;
+
+    private String category;
+
+    private int priority = 0;
+
     private String unit;
 
     private BigDecimal price = BigDecimal.ZERO;

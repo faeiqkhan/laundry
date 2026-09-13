@@ -41,7 +41,8 @@ export type IconName =
   | "shelves"
   | "folder"
   | "grid"
-  | "arrowLeft";
+  | "arrowLeft"
+  | "menu";
 
 interface IconProps extends SVGProps<SVGSVGElement> {
   name: IconName;
@@ -312,6 +313,13 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M19 12H5" />
       <path d="M12 19l-7-7 7-7" />
+    </>
+  ),
+  menu: (
+    <>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
     </>
   ),
 };

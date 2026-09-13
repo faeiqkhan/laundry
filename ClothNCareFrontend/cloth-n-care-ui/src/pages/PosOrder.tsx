@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCustomers, createCustomer, type Customer } from "../api/customers";
-import { getServices, type Service } from "../api/services";
+import { getActiveCatalog, type Product } from "../api/products";
 import { createOrder, recordPayment } from "../api/orders";
 import DashboardLayout from "../layout/DashboardLayout";
 import Icon from "../components/Icons";
@@ -12,9 +12,8 @@ import { downloadInvoice } from "../utils/invoice";
 
 interface CartItem {
   key: string;
-  service: Service;
+  product: Product;
   quantity: number;
-  price: number;
 }
 
 const tomorrowISO = (): string => {
@@ -23,12 +22,38 @@ const tomorrowISO = (): string => {
   return date.toISOString().split("T")[0];
 };
 
+const groupCatalog = (products: Product[]) => {
+  const services = new Map<string, Map<string, Product[]>>();
+  for (const product of products) {
+    const serviceName = product.service || "General";
+    let categories = services.get(serviceName);
+    if (!categories) {
+      categories = new Map<string, Product[]>();
+      services.set(serviceName, categories);
+    }
+    const categoryName = product.category || "General";
+    let list = categories.get(categoryName);
+    if (!list) {
+      list = [];
+      categories.set(categoryName, list);
+    }
+    list.push(product);
+  }
+  return services;
+};
+
+const isWeightUom = (product: Product): boolean =>
+  (product.unit || "").toLowerCase() === "kg";
+
 export default function PosOrderPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
+  const [catalog, setCatalog] = useState<Map<string, Map<string, Product[]>>>(new Map());
   const [customerId, setCustomerId] = useState("");
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [service, setService] = useState("");
+  const [category, setCategory] = useState("");
+  const [productSearch, setProductSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(tomorrowISO());
@@ -42,11 +67,22 @@ export default function PosOrderPage() {
   useEffect(() => {
     let ignore = false;
 
-    Promise.all([getCustomers(), getServices()])
-      .then(([customerList, serviceList]) => {
+    Promise.all([getCustomers(), getActiveCatalog()])
+      .then(([customerList, productList]) => {
         if (!ignore) {
           setCustomers(customerList);
-          setServices(serviceList.filter((service) => service.active));
+          const grouped = groupCatalog(productList);
+          setCatalog(grouped);
+          const firstService = grouped.keys().next().value as string | undefined;
+          if (firstService) {
+            setService(firstService);
+            const firstCategory = grouped
+              .get(firstService)!
+              .keys().next().value as string | undefined;
+            if (firstCategory) {
+              setCategory(firstCategory);
+            }
+          }
         }
       })
       .catch((err) => console.error(err))
@@ -59,8 +95,26 @@ export default function PosOrderPage() {
     };
   }, []);
 
+  const serviceNames = useMemo(() => Array.from(catalog.keys()), [catalog]);
+
+  const categoryNames = useMemo(() => {
+    if (!service) return [];
+    return Array.from(catalog.get(service)?.keys() ?? []);
+  }, [catalog, service]);
+
+  const visibleProducts = useMemo(() => {
+    let list = catalog.get(service)?.get(category) ?? [];
+    const term = productSearch.trim().toLowerCase();
+    if (term) {
+      list = list.filter((product) =>
+        product.name.toLowerCase().includes(term),
+      );
+    }
+    return list;
+  }, [catalog, service, category, productSearch]);
+
   const subtotal = useMemo(
-    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+    () => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
     [cart],
   );
 
@@ -71,43 +125,49 @@ export default function PosOrderPage() {
 
   const estimatedTotal = Math.max(0, subtotal - discountNum);
 
-  const addToCart = (service: Service) => {
+  const addToCart = (product: Product) => {
     setCart((current) => {
-      const existing = current.find((item) => item.service.id === service.id);
+      const existing = current.find((item) => item.product.id === product.id);
       if (existing) {
         return current.map((item) =>
-          item.service.id === service.id
+          item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item,
         );
       }
       return [
         ...current,
-        { key: uid(), service, quantity: 1, price: service.price },
+        { key: uid(), product, quantity: isWeightUom(product) ? 0.5 : 1 },
       ];
     });
-  };
-
-  const updatePrice = (key: string, value: string) => {
-    const num = Number(value);
-    setCart((current) =>
-      current.map((item) =>
-        item.key === key
-          ? { ...item, price: Number.isNaN(num) || num < 0 ? 0 : num }
-          : item,
-      ),
-    );
   };
 
   const changeQuantity = (key: string, delta: number) => {
     setCart((current) =>
       current
-        .map((item) =>
-          item.key === key
-            ? { ...item, quantity: Math.max(1, item.quantity + delta) }
-            : item,
-        )
+        .map((item) => {
+          if (item.key !== key) return item;
+          const step = isWeightUom(item.product) ? 0.1 : 1;
+          const next = Math.max(step, item.quantity + delta);
+          return {
+            ...item,
+            quantity: isWeightUom(item.product)
+              ? Math.round(next * 10) / 10
+              : Math.round(next),
+          };
+        })
         .filter((item) => item.quantity > 0),
+    );
+  };
+
+  const setQuantityValue = (key: string, value: string) => {
+    const num = Number(value);
+    setCart((current) =>
+      current.map((item) =>
+        item.key === key
+          ? { ...item, quantity: Number.isNaN(num) ? 0 : num }
+          : item,
+      ),
     );
   };
 
@@ -126,7 +186,7 @@ export default function PosOrderPage() {
 
   const handlePlaceOrder = async () => {
     if (cart.length === 0) {
-      setError("Add at least one service to the order");
+      setError("Add at least one product to the order");
       return;
     }
 
@@ -155,10 +215,13 @@ export default function PosOrderPage() {
       const order = await createOrder({
         customerId: resolvedCustomerId,
         items: cart.map((item) => ({
-          service_type: item.service.name,
-          product_type: item.service.productType,
+          product_id: item.product.id,
+          product_name: item.product.name,
+          service_type: item.product.service,
+          product_type: item.product.category,
+          uom: item.product.unit,
           quantity: item.quantity,
-          unit_price: item.price,
+          unit_price: item.product.price,
         })),
         expected_delivery_date: deliveryDate,
         discount: discountNum,
@@ -331,7 +394,7 @@ export default function PosOrderPage() {
       <div className="page-header">
         <div className="page-header-text">
           <h1>POS Order</h1>
-          <p>Quick order entry with instant billing</p>
+          <p>Select service, category, and product — pricing is automatic</p>
         </div>
       </div>
 
@@ -398,33 +461,104 @@ export default function PosOrderPage() {
 
       <div className="stats-grid" style={{ marginBottom: 16 }}>
         <div className="table-card" style={{ padding: 16 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16 }}>Services</h2>
+          <h2 style={{ margin: "0 0 12px", fontSize: 16 }}>
+            {service ? `Service: ${service}` : "Services"}
+          </h2>
+
           <div className="kpi-grid">
-            {services.length === 0 ? (
-              <p className="cell-muted">No active services configured</p>
+            {serviceNames.length === 0 ? (
+              <p className="cell-muted">No active products configured</p>
             ) : (
-              services.map((service) => (
+              serviceNames.map((serviceName) => (
                 <button
-                  key={service.id}
+                  key={serviceName}
                   type="button"
                   className="stat-card"
-                  style={{ cursor: "pointer", textAlign: "left", width: "100%" }}
-                  onClick={() => addToCart(service)}
+                  style={{
+                    cursor: "pointer",
+                    textAlign: "left",
+                    width: "100%",
+                    outline: service === serviceName ? "2px solid var(--primary, #2563eb)" : undefined,
+                  }}
+                  onClick={() => {
+                    setService(serviceName);
+                    setCategory(
+                      catalog.get(serviceName)?.keys().next().value as string,
+                    );
+                    setProductSearch("");
+                  }}
                 >
                   <div className="stat-card-top">
-                    <span className="stat-card-label">{service.name}</span>
-                    <span className="stat-card-icon">
-                      <Icon name="plus" size={16} />
-                    </span>
+                    <span className="stat-card-label">{serviceName}</span>
                   </div>
-                  <div className="stat-card-value">
-                    {formatMoney(service.price)}
+                  <div className="stat-card-sub">
+                    {catalog.get(serviceName)?.size ?? 0} categories
                   </div>
-                  <div className="stat-card-sub">{service.productType}</div>
                 </button>
               ))
             )}
           </div>
+
+          {service && (
+            <>
+              <div className="flex gap-8" style={{ margin: "12px 0", flexWrap: "wrap" }}>
+                {categoryNames.map((categoryName) => (
+                  <button
+                    key={categoryName}
+                    type="button"
+                    className={`btn btn-sm ${
+                      category === categoryName ? "btn-primary" : "btn-secondary"
+                    }`}
+                    onClick={() => {
+                      setCategory(categoryName);
+                      setProductSearch("");
+                    }}
+                  >
+                    {categoryName}
+                  </button>
+                ))}
+              </div>
+
+              <div className="form-field" style={{ marginBottom: 12 }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Search products..."
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                />
+              </div>
+
+              <div className="kpi-grid">
+                {visibleProducts.length === 0 ? (
+                  <p className="cell-muted">No products in this category</p>
+                ) : (
+                  visibleProducts.map((product) => (
+                    <button
+                      key={product.id}
+                      type="button"
+                      className="stat-card"
+                      style={{ cursor: "pointer", textAlign: "left", width: "100%" }}
+                      onClick={() => addToCart(product)}
+                    >
+                      <div className="stat-card-top">
+                        <span className="stat-card-label">{product.name}</span>
+                        <span className="stat-card-icon">
+                          <Icon name="plus" size={16} />
+                        </span>
+                      </div>
+                      <div className="stat-card-value">
+                        {formatMoney(product.price)}
+                      </div>
+                      <div className="stat-card-sub">
+                        {product.unit || "Nos"} · {product.category}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -433,9 +567,9 @@ export default function PosOrderPage() {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Service</th>
+              <th>Product</th>
               <th>Qty</th>
-              <th>Price</th>
+              <th>Rate</th>
               <th>Line Total</th>
               <th />
             </tr>
@@ -446,7 +580,7 @@ export default function PosOrderPage() {
                 <td colSpan={5}>
                   <div className="table-empty">
                     <Icon name="shirt" size={32} className="table-empty-icon" />
-                    <div>Tap a service to add it</div>
+                    <div>Select a product to add it</div>
                   </div>
                 </td>
               </tr>
@@ -454,44 +588,50 @@ export default function PosOrderPage() {
               cart.map((item) => (
                 <tr key={item.key}>
                   <td>
-                    {item.service.name}
-                    <div className="muted">{item.service.productType}</div>
-                  </td>
-                  <td>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => changeQuantity(item.key, -1)}
-                      >
-                        −
-                      </button>
-                      <span style={{ minWidth: 32, textAlign: "center", fontWeight: 700 }}>
-                        {item.quantity}
-                      </span>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-secondary"
-                        onClick={() => changeQuantity(item.key, 1)}
-                      >
-                        +
-                      </button>
+                    {item.product.name}
+                    <div className="muted">
+                      {item.product.service} · {item.product.category}
                     </div>
                   </td>
                   <td>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="form-input"
-                      style={{ maxWidth: 110, textAlign: "right" }}
-                      value={item.price}
-                      onChange={(event) => updatePrice(item.key, event.target.value)}
-                      aria-label={`Price for ${item.service.name}`}
-                    />
+                    {isWeightUom(item.product) ? (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        className="form-input"
+                        style={{ maxWidth: 90, textAlign: "right" }}
+                        value={item.quantity}
+                        onChange={(event) =>
+                          setQuantityValue(item.key, event.target.value)
+                        }
+                        aria-label={`Quantity for ${item.product.name}`}
+                      />
+                    ) : (
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => changeQuantity(item.key, -1)}
+                        >
+                          −
+                        </button>
+                        <span style={{ minWidth: 32, textAlign: "center", fontWeight: 700 }}>
+                          {item.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => changeQuantity(item.key, 1)}
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
                   </td>
+                  <td className="cell-total">{formatMoney(item.product.price)}</td>
                   <td className="cell-total">
-                    {formatMoney(item.price * item.quantity)}
+                    {formatMoney(item.product.price * item.quantity)}
                   </td>
                   <td>
                     <button

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import { Link } from "react-router-dom";
@@ -16,15 +16,37 @@ const mobileLinks = [
   { to: "/reports", label: "Reports", icon: "reports" },
 ] as const;
 
+const COLLAPSE_KEY = "clothncare.sidebar.collapsed";
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleCollapsed = () => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="dashboard-layout">
+    <div className={`dashboard-layout${collapsed ? " sidebar-collapsed" : ""}`}>
       <div className="sidebar-wrap">
         <Sidebar />
       </div>
 
       <div className="dashboard-main">
-        <Topbar />
+        <Topbar onToggleSidebar={toggleCollapsed} collapsed={collapsed} />
 
         <main className="dashboard-content">{children}</main>
 

@@ -11,7 +11,7 @@ const CustomerStatementReport = lazy(() => import("./customer-statement"));
 const CustomerSummaryReport = lazy(() => import("./customer-summary"));
 const ProductReport = lazy(() => import("./product-report"));
 const SearchInvoiceReport = lazy(() => import("./search-invoice"));
-const ChalanReport = lazy(() => import("./chalan"));
+const WorkshopHistoryReport = lazy(() => import("./workshop-history"));
 const WhatsAppHistoryReport = lazy(() => import("./whatsapp-history"));
 const UnpaidInvoicesReport = lazy(() => import("./unpaid-invoices"));
 const OrderDetailsReport = lazy(() => import("./order-details"));
@@ -31,7 +31,7 @@ const REPORT_TABS: ReportTab[] = [
   { kind: "customer-summary", label: "Customer Summary" },
   { kind: "product-report", label: "Product Report" },
   { kind: "search-invoice", label: "Search Invoice" },
-  { kind: "chalan", label: "Chalan" },
+  { kind: "workshop-history", label: "Challan Report" },
   { kind: "whatsapp-history", label: "WhatsApp Messages" },
   { kind: "unpaid-invoices", label: "Unpaid Invoices" },
   { kind: "order-details", label: "Order Details" },
@@ -46,7 +46,7 @@ const TITLES: Record<string, string> = {
   "customer-summary": "Customer Summary Report",
   "product-report": "Product Report",
   "search-invoice": "Search Invoice",
-  chalan: "Chalan Report",
+  "workshop-history": "Challan Report",
   "whatsapp-history": "WhatsApp Message History",
   "unpaid-invoices": "Unpaid Invoice History",
   "order-details": "Order Details Report",
@@ -76,8 +76,8 @@ export default function ReportsPage() {
         return <ProductReport />;
       case "search-invoice":
         return <SearchInvoiceReport />;
-      case "chalan":
-        return <ChalanReport />;
+      case "workshop-history":
+        return <WorkshopHistoryReport />;
       case "whatsapp-history":
         return <WhatsAppHistoryReport />;
       case "unpaid-invoices":

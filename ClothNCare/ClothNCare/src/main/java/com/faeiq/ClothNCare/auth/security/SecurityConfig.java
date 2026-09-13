@@ -50,53 +50,41 @@ public class SecurityConfig {
                 // ✅ Authorization rules
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public endpoints. All data APIs live behind /api/** and the
-                        // invoice files behind /invoices/**, which stay authenticated.
-                        // The SPA routes below serve only the static HTML shell.
+                        // Allow preflight (important for frontend)
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                        // Public static web assets only (no data - just the SPA shell).
                         .requestMatchers(
-                                "/api/auth/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/v3/api-docs/**",
-                                "/swagger-resources/**",
-                                "/webjars/**",
                                 "/",
                                 "/index.html",
                                 "/assets/**",
                                 "/favicon.ico",
                                 "/favicon.svg",
-                                "/error",
-                                "/dashboard",
-                                "/orders",
-                                "/customers",
-                                "/services",
-                                "/register",
-                                "/reports",
-                                "/expenses",
-                                "/settings",
-                                "/staff",
-                                "/products",
-                                "/expense-heads",
-                                "/additional-charges",
-                                "/storage-bags",
-                                "/storage-racks",
-                                "/price-lists",
-                                "/create-price-list",
-                                "/pos",
-                                "/delivery-orders",
-                                "/invoices",
-                                "/collection",
-                                "/payments",
-                                "/multi-expense",
-                                "/analytical-dashboard",
-                                "/yearly-dashboard"
+                                "/error"
                         ).permitAll()
 
-                        // Allow preflight (important for frontend)
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Swagger/OpenAPI docs stay public for developer convenience.
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**",
+                                "/swagger-resources/**",
+                                "/webjars/**"
+                        ).permitAll()
 
-                        // Everything else secured
-                        .anyRequest().authenticated()
+                        // Authentication endpoints are public; everything else under
+                        // /api/** requires a valid JWT.
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/**").authenticated()
+
+                        // Invoice files are sensitive - always require a token.
+                        .requestMatchers("/invoices/**").authenticated()
+
+                        // SPA route shell: any other path that isn't an actual file
+                        // is just the read-only index.html (forwarded by WebConfig),
+                        // so it can be served without a token. All data lives behind
+                        // /api/** which stays authenticated above.
+                        .anyRequest().permitAll()
                 )
 
                 // ✅ Add JWT filter

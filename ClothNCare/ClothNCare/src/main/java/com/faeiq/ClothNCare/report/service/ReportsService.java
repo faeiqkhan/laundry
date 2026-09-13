@@ -82,7 +82,7 @@ public class ReportsService {
                 .collect(Collectors.groupingBy(
                         OrdersItems::getService_type,
                         Collectors.mapping(
-                                item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())),
+                                item -> item.getLineTotal() == null ? BigDecimal.ZERO : item.getLineTotal(),
                                 Collectors.reducing(BigDecimal.ZERO, BigDecimal::add)
                         )
                 ));

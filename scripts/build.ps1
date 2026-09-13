@@ -89,32 +89,64 @@ if (-not $jar) {
 
 # ---------------------------------------------------------------- Release
 Write-Host "`nAssembling release folder..." -ForegroundColor Cyan
-Remove-Item $release -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $release -Force | Out-Null
 
 Copy-Item $jar.FullName (Join-Path $release "ClothNCare.jar")
 Copy-Item (Join-Path $PSScriptRoot "start.bat") (Join-Path $release "start.bat")
 Copy-Item (Join-Path $PSScriptRoot "README-CLIENT.txt") (Join-Path $release "README-CLIENT.txt")
-New-Item -ItemType Directory -Path (Join-Path $release "invoices") | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $release "invoices") -Force | Out-Null
+
+# Bundle the WhatsApp service (Node.js / whatsapp-web.js) so the WhatsApp
+# feature works on the client PC. Session data, web cache and logs are
+# per-machine state and are intentionally excluded.
+$waSrc = Join-Path $repoRoot "whatsapp-service"
+if (Test-Path (Join-Path $waSrc "src\server.js")) {
+    Write-Host "Copying WhatsApp service (Node.js)..." -ForegroundColor Cyan
+    $waDest = Join-Path $release "whatsapp-service"
+    & robocopy $waSrc $waDest /E /XD "$waSrc\whatsapp-session" "$waSrc\whatsapp-web-cache" ".git" "$waSrc\node_modules\.cache" /NFL /NDL /NJH /NJS | Out-Null
+    if ($LASTEXITCODE -lt 8) {
+        $global:LASTEXITCODE = 0
+    } else {
+        throw "robocopy failed while copying whatsapp-service"
+    }
+} else {
+    Write-Host "WARNING: whatsapp-service not found - WhatsApp will be disabled in the release." -ForegroundColor Yellow
+}
 
 # Bundle a portable Java runtime so the client does not need to install Java.
 # Extract a Temurin JRE (17 or newer) once into jre-staging\jre - it is copied
-# here on every build. Falls back to the system Java at runtime if missing.
+# into the release. The copy is done only when release\jre is missing: a
+# running app locks these DLLs and they cannot be overwritten, and the bundled
+# runtime does not change between builds. Falls back to the system Java at
+# runtime if missing.
 $jreStaging = Join-Path $repoRoot "jre-staging\jre"
 if (Test-Path $jreStaging) {
-    Write-Host "Copying bundled Java runtime (jre-staging\jre -> release\jre)..." -ForegroundColor Cyan
-    New-Item -ItemType Directory -Path (Join-Path $release "jre") -Force | Out-Null
-    Copy-Item "$jreStaging\*" (Join-Path $release "jre") -Recurse -Force
+    $jreInRelease = Join-Path $release "jre"
+    $jreComplete = (Test-Path (Join-Path $jreInRelease "bin\java.exe")) -and
+                   (Test-Path (Join-Path $jreInRelease "lib\jvm.cfg"))
+    if ($jreComplete) {
+        Write-Host "Reusing existing release\jre (bundled Java already present)..." -ForegroundColor Cyan
+    } else {
+        Write-Host "Copying bundled Java runtime (jre-staging\jre -> release\jre)..." -ForegroundColor Cyan
+        Remove-Item $jreInRelease -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $jreInRelease -Force | Out-Null
+        Copy-Item "$jreStaging\*" $jreInRelease -Recurse -Force
+    }
 } else {
     Write-Host "WARNING: jre-staging\jre not found - release will require Java to be installed." -ForegroundColor Yellow
 }
 
-# Seed the release with the current database so existing data is preserved.
+# Seed the release with a database only when the release has none yet, so a
+# running/deployed app keeps its own data (and no file-lock errors occur).
 if (Test-Path "$backend\data\clothncare.db") {
     New-Item -ItemType Directory -Path (Join-Path $release "data") -Force | Out-Null
-    Copy-Item "$backend\data\clothncare.db" (Join-Path $release "data\clothncare.db") -Force
+    if (Test-Path (Join-Path $release "data\clothncare.db")) {
+        Write-Host "Keeping existing release data (release\data\clothncare.db). Delete it first to seed from the dev database." -ForegroundColor Cyan
+    } else {
+        Copy-Item "$backend\data\clothncare.db" (Join-Path $release "data\clothncare.db") -Force
+    }
 } else {
-    New-Item -ItemType Directory -Path (Join-Path $release "data") | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $release "data") -Force | Out-Null
 }
 
 Write-Host "`nDONE. Copy the 'release' folder to the client PC:" -ForegroundColor Green

@@ -9,9 +9,12 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class OrderItemResponseDTO {
     private String id;
+    private String productId;
+    private String productName;
     private String serviceType;
     private String productType;
-    private int quantity;
+    private String uom;
+    private BigDecimal quantity;
     private BigDecimal unitPrice;
     private BigDecimal lineTotal;
 }

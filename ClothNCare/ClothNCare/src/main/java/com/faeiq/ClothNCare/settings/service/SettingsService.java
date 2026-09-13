@@ -48,6 +48,22 @@ public class SettingsService {
                 ? settings.getWhatsAppInvoiceTemplate() : dto.getWhatsAppInvoiceTemplate());
         settings.setWhatsAppStatusTemplate(dto.getWhatsAppStatusTemplate() == null
                 ? settings.getWhatsAppStatusTemplate() : dto.getWhatsAppStatusTemplate());
+        settings.setWhatsAppProvider(dto.getWhatsAppProvider() == null
+                ? settings.getWhatsAppProvider() : dto.getWhatsAppProvider());
+        if (dto.getWhatsAppTestMode() != null) {
+            settings.setWhatsAppTestMode(dto.getWhatsAppTestMode());
+        }
+        settings.setWhatsAppTestNumber(dto.getWhatsAppTestNumber() == null
+                ? settings.getWhatsAppTestNumber() : dto.getWhatsAppTestNumber());
+        if (dto.getWhatsAppAutoWelcome() != null) {
+            settings.setWhatsAppAutoWelcome(dto.getWhatsAppAutoWelcome());
+        }
+        if (dto.getWhatsAppAutoInvoice() != null) {
+            settings.setWhatsAppAutoInvoice(dto.getWhatsAppAutoInvoice());
+        }
+        if (dto.getWhatsAppAutoStatus() != null) {
+            settings.setWhatsAppAutoStatus(dto.getWhatsAppAutoStatus());
+        }
         return settingsRepository.save(settings);
     }
 

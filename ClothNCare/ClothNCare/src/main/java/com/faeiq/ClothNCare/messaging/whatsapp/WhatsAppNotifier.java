@@ -14,53 +14,71 @@ import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+/**
+ * Builds customer-facing notification messages and feeds them to the
+ * WhatsAppMessagingService queue. Automatic notifications only fire when the
+ * matching whatsAppAuto* setting is enabled (all OFF by default).
+ */
 @Service
 @RequiredArgsConstructor
 public class WhatsAppNotifier {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy");
 
-    private final WhatsAppService whatsAppService;
+    private static final String TYPE_CUSTOMER_CREATED = "CUSTOMER_CREATED";
+    private static final String TYPE_ORDER_CREATED = "ORDER_CREATED";
+    private static final String TYPE_STATUS_CHANGED = "STATUS_CHANGED";
+
+    private final WhatsAppMessagingService messagingService;
     private final SettingsService settingsService;
 
     public void notifyCustomerCreated(Customer customer) {
-        if (customer == null || isBlank(customer.getPhone())) {
+        AppSettings settings = settingsService.getSettings();
+        if (!settings.isWhatsAppAutoWelcome() || customer == null || isBlank(customer.getPhone())) {
             return;
         }
-        AppSettings settings = settingsService.getSettings();
         String body = "Hi " + safe(customer.getName()) + ",\n\n"
                 + "Welcome to " + businessName(settings) + "!\n"
                 + "You have been added as a customer. You can now place orders and "
                 + "you will receive updates on your phone as your order progresses.\n\n"
                 + "Thank you for choosing " + businessName(settings) + ".";
-        whatsAppService.send(WhatsAppService.CAT_WELCOME, customer.getPhone(), body,
-                settings.getWhatsAppWelcomeTemplate(), List.of(safe(customer.getName())));
+        WhatsAppMessageRequest request = request(customer, WhatsAppMessageStatus.CAT_WELCOME,
+                customer.getPhone(), body, settings.getWhatsAppWelcomeTemplate(),
+                List.of(safe(customer.getName())));
+        request.setMessageType(TYPE_CUSTOMER_CREATED);
+        request.setBusinessKey("CUSTOMER:" + customer.getId());
+        messagingService.submit(request);
     }
 
     public void notifyOrderCreated(Orders order) {
-        if (order == null || order.getCustomer() == null || isBlank(order.getCustomer().getPhone())) {
+        AppSettings settings = settingsService.getSettings();
+        if (!settings.isWhatsAppAutoInvoice()
+                || order == null || order.getCustomer() == null || isBlank(order.getCustomer().getPhone())) {
             return;
         }
-        AppSettings settings = settingsService.getSettings();
         String body = buildInvoiceText(order, settings);
-        whatsAppService.send(WhatsAppService.CAT_INVOICE, order.getCustomer().getPhone(), body,
-                settings.getWhatsAppInvoiceTemplate(),
+        WhatsAppMessageRequest request = request(order, WhatsAppMessageStatus.CAT_INVOICE,
+                order.getCustomer().getPhone(), body, settings.getWhatsAppInvoiceTemplate(),
                 List.of(
                         safe(order.getCustomer().getName()),
                         safe(order.getInvoice_number()),
                         fmt(order.getTotal_price()),
                         order.getExpected_delivery_date() != null
                                 ? order.getExpected_delivery_date().format(DATE_FMT) : "-"));
+        request.setMessageType(TYPE_ORDER_CREATED);
+        request.setBusinessKey("ORDER:" + order.getId() + ":INVOICE");
+        messagingService.submit(request);
     }
 
     public void notifyStatusChanged(Orders order, Status previous) {
-        if (order == null || order.getCustomer() == null || isBlank(order.getCustomer().getPhone())) {
+        AppSettings settings = settingsService.getSettings();
+        if (!settings.isWhatsAppAutoStatus()
+                || order == null || order.getCustomer() == null || isBlank(order.getCustomer().getPhone())) {
             return;
         }
         if (previous == order.getStatus()) {
             return;
         }
-        AppSettings settings = settingsService.getSettings();
         StringBuilder body = new StringBuilder();
         body.append("Hi ").append(safe(order.getCustomer().getName())).append(",\n\n");
         body.append("Update on your order ").append(safe(order.getInvoice_number())).append(":\n");
@@ -70,12 +88,35 @@ public class WhatsAppNotifier {
             body.append("\nReady for delivery from ").append(order.getExpected_delivery_date().format(DATE_FMT));
         }
         body.append("\n\n").append(businessName(settings));
-        whatsAppService.send(WhatsAppService.CAT_STATUS, order.getCustomer().getPhone(), body.toString(),
-                settings.getWhatsAppStatusTemplate(),
+        WhatsAppMessageRequest request = request(order, WhatsAppMessageStatus.CAT_STATUS,
+                order.getCustomer().getPhone(), body.toString(), settings.getWhatsAppStatusTemplate(),
                 List.of(
                         safe(order.getCustomer().getName()),
                         safe(order.getInvoice_number()),
                         order.getStatus().name()));
+        request.setMessageType(TYPE_STATUS_CHANGED);
+        request.setBusinessKey("ORDER:" + order.getId() + ":" + order.getStatus());
+        messagingService.submit(request);
+    }
+
+    private WhatsAppMessageRequest request(Customer customer, String category, String to, String body,
+                                           String templateName, List<String> templateParams) {
+        WhatsAppMessageRequest request = new WhatsAppMessageRequest(category, to, body);
+        request.setTemplateName(templateName);
+        request.setTemplateParams(templateParams);
+        request.setCustomerId(customer.getId());
+        return request;
+    }
+
+    private WhatsAppMessageRequest request(Orders order, String category, String to, String body,
+                                           String templateName, List<String> templateParams) {
+        WhatsAppMessageRequest request = new WhatsAppMessageRequest(category, to, body);
+        request.setTemplateName(templateName);
+        request.setTemplateParams(templateParams);
+        request.setCustomerId(order.getCustomer() != null ? order.getCustomer().getId() : null);
+        request.setOrderId(order.getId());
+        request.setInvoiceId(order.getInvoice_number());
+        return request;
     }
 
     private String buildInvoiceText(Orders order, AppSettings settings) {
@@ -94,15 +135,16 @@ public class WhatsAppNotifier {
         sb.append("\n*Items*\n");
 
         BigDecimal subtotal = BigDecimal.ZERO;
-        for (OrdersItems item : order.getItems()) {
-            String desc = item.getService_type()
+        if (order.getItems() != null) {
+            for (OrdersItems item : order.getItems()) {
+            String desc = (item.getProduct_name() != null ? item.getProduct_name() : item.getService_type())
                     + (item.getProduct_type() != null ? " - " + item.getProduct_type() : "");
-            BigDecimal lineTotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()))
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal lineTotal = item.getLineTotal().setScale(2, RoundingMode.HALF_UP);
             subtotal = subtotal.add(lineTotal);
             sb.append("- ").append(desc)
-                    .append(" x").append(item.getQuantity())
+                    .append(" x").append(fmtQty(item.getQuantity()))
                     .append(" = ").append(symbol).append(fmt(lineTotal)).append("\n");
+            }
         }
 
         sb.append("\nSubtotal: ").append(symbol).append(fmt(subtotal)).append("\n");
@@ -147,6 +189,17 @@ public class WhatsAppNotifier {
     private String fmt(BigDecimal value) {
         if (value == null) {
             return "0.00";
+        }
+        return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    }
+
+    private String fmtQty(BigDecimal value) {
+        if (value == null) {
+            return "0";
+        }
+        BigDecimal stripped = value.stripTrailingZeros();
+        if (stripped.scale() <= 0) {
+            return stripped.toBigInteger().toString();
         }
         return value.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }

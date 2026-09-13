@@ -62,7 +62,7 @@ const reportsNav: NavItem[] = [
   { to: "/reports/customer-summary", label: "Customer Summary Report", icon: "grid" },
   { to: "/reports/product-report", label: "Product Report", icon: "box" },
   { to: "/reports/search-invoice", label: "Search Invoice", icon: "search" },
-  { to: "/reports/chalan", label: "Chalan Report", icon: "tag" },
+  { to: "/reports/workshop-history", label: "Challan Report", icon: "tag" },
   { to: "/reports/whatsapp-history", label: "WhatsApp Message History", icon: "phone" },
   { to: "/reports/unpaid-invoices", label: "Unpaid Invoice History", icon: "trend-down" },
   { to: "/reports/order-details", label: "Order Details Report", icon: "eye" },
@@ -77,8 +77,6 @@ const groups: NavGroup[] = [
 ];
 
 const settingsLink: NavItem = { to: "/settings", label: "Settings", icon: "settings" };
-
-const DEFAULT_OPEN = new Set(["masters", "reports"]);
 
 function SidebarGroup({
   group,
@@ -140,22 +138,10 @@ export default function Sidebar() {
     [admin],
   );
 
-  const activeGroupKey = useMemo(
-    () =>
-      visibleGroups.find((group) =>
-        group.items.some((item) => isItemActive(item.to)),
-      )?.key,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [location.pathname, location.search, visibleGroups],
-  );
-
   const [explicit, setExplicit] = useState<Record<string, boolean>>({});
 
-  const isGroupOpen = (group: NavGroup) => {
-    if (group.key in explicit) return explicit[group.key];
-    if (group.key === activeGroupKey) return true;
-    return DEFAULT_OPEN.has(group.key);
-  };
+  const isGroupOpen = (group: NavGroup) =>
+    group.key in explicit ? explicit[group.key] !== false : false;
 
   const toggleGroup = (key: string) => {
     const group = visibleGroups.find((entry) => entry.key === key);

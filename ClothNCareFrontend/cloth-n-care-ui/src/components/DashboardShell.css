@@ -9,6 +9,8 @@
 
 .sidebar-wrap {
   flex: 0 0 var(--sidebar-width);
+  min-width: 0;
+  transition: flex-basis 0.25s ease;
 }
 
 .sidebar {
@@ -23,6 +25,15 @@
   padding: 20px 14px 16px;
   color: #c7d2fe;
   background: var(--sidebar-bg);
+  transition: transform 0.25s ease;
+}
+
+.dashboard-layout.sidebar-collapsed .sidebar-wrap {
+  flex-basis: 0;
+}
+
+.dashboard-layout.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
 }
 
 .sidebar-brand {
@@ -220,9 +231,20 @@
   backdrop-filter: blur(8px);
 }
 
+.topbar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .topbar-title h2 {
   font-size: 20px;
   font-weight: 800;
+}
+
+.sidebar-toggle-btn {
+  display: grid;
+  place-items: center;
 }
 
 .topbar-actions {
@@ -767,6 +789,12 @@
 
 .data-table td.cell-muted {
   color: var(--slate-400);
+}
+
+.data-table th.num,
+.data-table td.num {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .data-table .row-actions {
@@ -1461,6 +1489,17 @@
 .mt-20 { margin-top: 20px; }
 .mb-16 { margin-bottom: 16px; }
 
+.whatsapp-qr {
+  display: block;
+  width: 228px;
+  height: 228px;
+  margin-top: 10px;
+  border: 1px solid var(--slate-200, #e2e8f0);
+  border-radius: var(--radius, 10px);
+  padding: 8px;
+  background: #fff;
+}
+
 .empty-state {
   padding: 48px 20px;
   text-align: center;
@@ -1837,6 +1876,11 @@
   border: 1px solid var(--border, #e2e8f0);
 }
 
+.workshop-sheet {
+  max-width: none;
+  overflow-x: auto;
+}
+
 .print-sheet h2 {
   margin: 0 0 4px;
 }
@@ -1876,6 +1920,31 @@
     max-width: none;
     border: none;
     box-shadow: none;
+  }
+
+  .workshop-sheet {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    page-break-after: auto;
+  }
+
+  .workshop-sheet table.data-table {
+    width: 100%;
+    font-size: 11px;
+  }
+
+  .workshop-sheet table.data-table th,
+  .workshop-sheet table.data-table td {
+    padding: 4px 6px;
+  }
+
+  .workshop-sheet table.data-table thead {
+    display: table-header-group;
+  }
+
+  .workshop-sheet table.data-table tbody {
+    page-break-inside: avoid;
   }
 
   .no-print {

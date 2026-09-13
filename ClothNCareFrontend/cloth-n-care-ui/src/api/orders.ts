@@ -2,9 +2,12 @@ import api from "./axios";
 import type { Order, PaymentMethod } from "../types/order";
 
 export interface OrderItemPayload {
-  service_type: string;
-  product_type: string;
-  quantity: number;
+  product_id?: string;
+  product_name?: string;
+  service_type?: string;
+  product_type?: string;
+  uom?: string;
+  quantity?: number;
   unit_price?: number;
 }
 

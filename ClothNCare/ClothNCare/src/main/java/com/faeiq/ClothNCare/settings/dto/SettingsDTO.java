@@ -23,4 +23,10 @@ public class SettingsDTO {
     private String whatsAppWelcomeTemplate;
     private String whatsAppInvoiceTemplate;
     private String whatsAppStatusTemplate;
+    private String whatsAppProvider;
+    private Boolean whatsAppTestMode;
+    private String whatsAppTestNumber;
+    private Boolean whatsAppAutoWelcome;
+    private Boolean whatsAppAutoInvoice;
+    private Boolean whatsAppAutoStatus;
 }

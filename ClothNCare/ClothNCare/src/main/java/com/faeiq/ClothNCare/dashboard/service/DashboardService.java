@@ -205,7 +205,7 @@ public class DashboardService {
                 .filter(item -> item.getService_type() != null && item.getPrice() != null)
                 .collect(Collectors.groupingBy(
                         OrdersItems::getService_type,
-                        Collectors.summingDouble(item -> item.getPrice().doubleValue() * item.getQuantity())
+                        Collectors.summingDouble(item -> item.getLineTotal() == null ? 0 : item.getLineTotal().doubleValue())
                 ));
 
         Map<String, Double> paymentByMethod = payments.stream()

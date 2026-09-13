@@ -3,6 +3,9 @@ import api from "./axios";
 export interface Product {
   id: string;
   name: string;
+  service: string;
+  category: string;
+  priority: number;
   unit: string;
   price: number;
   active: boolean;
@@ -10,6 +13,9 @@ export interface Product {
 
 export interface ProductPayload {
   name: string;
+  service?: string;
+  category?: string;
+  priority?: number;
   unit?: string;
   price?: number;
   active?: boolean;
@@ -17,6 +23,18 @@ export interface ProductPayload {
 
 export const getProducts = async () => {
   const res = await api.get<{ data: Product[] }>("/products");
+  return res.data.data;
+};
+
+export const getActiveCatalog = async () => {
+  const res = await api.get<{ data: Product[] }>("/products/catalog");
+  return res.data.data;
+};
+
+export const getCatalogByService = async (service: string) => {
+  const res = await api.get<{ data: Product[] }>(
+    `/products/catalog/service/${encodeURIComponent(service)}`,
+  );
   return res.data.data;
 };
 

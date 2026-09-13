@@ -20,6 +20,8 @@ import com.faeiq.ClothNCare.orders.entity.Status;
 import com.faeiq.ClothNCare.orders.repository.OrdersRepository;
 import com.faeiq.ClothNCare.orders.repository.PaymentRepository;
 import com.faeiq.ClothNCare.orders.dto.PaymentRecordDTO;
+import com.faeiq.ClothNCare.product.entity.Product;
+import com.faeiq.ClothNCare.product.repository.ProductRepository;
 import com.faeiq.ClothNCare.settings.service.SettingsService;
 import com.faeiq.ClothNCare.user.entity.Users;
 import com.faeiq.ClothNCare.user.repository.UsersRepository;
@@ -45,6 +47,7 @@ public class OrdersService {
     private final PaymentRepository paymentRepository;
     private final UsersRepository usersRepository;
     private final LaundryServiceService laundryServiceService;
+    private final ProductRepository productRepository;
     private final InvoiceService invoiceService;
     private final SettingsService settingsService;
     private final WhatsAppNotifier whatsAppNotifier;
@@ -71,18 +74,39 @@ public class OrdersService {
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (OrderItemsDTO itemDTO : orderDTO.getItems()) {
-            BigDecimal unitPrice = itemDTO.getUnitPrice() != null && itemDTO.getUnitPrice().compareTo(BigDecimal.ZERO) > 0
-                    ? itemDTO.getUnitPrice()
-                    : laundryServiceService.getPrice(itemDTO.getServiceType(), itemDTO.getProductType());
-
             OrdersItems item = new OrdersItems();
             item.setOrders(order);
-            item.setService_type(itemDTO.getServiceType());
-            item.setProduct_type(itemDTO.getProductType());
-            item.setQuantity(itemDTO.getQuantity());
+
+            Product product = null;
+            if (itemDTO.getProductId() != null && !itemDTO.getProductId().isBlank()) {
+                product = productRepository.findById(itemDTO.getProductId()).orElse(null);
+            }
+
+            if (product != null) {
+                item.setProduct_id(product.getId());
+                item.setProduct_name(product.getName());
+                item.setService_type(product.getService());
+                item.setProduct_type(product.getCategory());
+                item.setUom(product.getUnit());
+            } else {
+                item.setProduct_id(itemDTO.getProductId());
+                item.setProduct_name(itemDTO.getProductName());
+                item.setService_type(itemDTO.getServiceType());
+                item.setProduct_type(itemDTO.getProductType());
+                item.setUom(itemDTO.getUom());
+            }
+
+            BigDecimal unitPrice = resolveUnitPrice(itemDTO, product, item.getService_type(), item.getProduct_type());
+            if (unitPrice == null) {
+                throw new BadRequestException("No price available for " + item.getService_type()
+                        + " - " + item.getProduct_type());
+            }
+
+            BigDecimal quantity = itemDTO.getQuantity() == null ? BigDecimal.ONE : itemDTO.getQuantity();
+            item.setQuantity(quantity);
             item.setPrice(unitPrice);
 
-            subtotal = subtotal.add(unitPrice.multiply(BigDecimal.valueOf(itemDTO.getQuantity())));
+            subtotal = subtotal.add(unitPrice.multiply(quantity));
             items.add(item);
         }
 
@@ -241,15 +265,36 @@ public class OrdersService {
             throw new BadRequestException("Order must contain at least one item");
         }
         for (OrderItemsDTO item : orderDTO.getItems()) {
-            if (item.getServiceType() == null || item.getProductType() == null) {
-                throw new BadRequestException("Service type and product type are required");
+            if (item.getProductId() == null && (item.getServiceType() == null || item.getProductType() == null)) {
+                throw new BadRequestException("Product id or service/product type is required");
             }
-            if (item.getQuantity() <= 0) {
+            if (item.getQuantity() == null || item.getQuantity().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new BadRequestException("Item quantity must be greater than zero");
             }
             if (item.getUnitPrice() != null && item.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
                 throw new BadRequestException("Unit price cannot be negative");
             }
+        }
+    }
+
+    private BigDecimal resolveUnitPrice(OrderItemsDTO itemDTO, Product product, String service, String productType) {
+        if (product != null) {
+            if (product.getPrice() != null && product.getPrice().compareTo(BigDecimal.ZERO) > 0) {
+                return product.getPrice();
+            }
+            try {
+                return laundryServiceService.getPrice(service, productType);
+            } catch (RuntimeException ignore) {
+                return null;
+            }
+        }
+        if (itemDTO.getUnitPrice() != null && itemDTO.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
+            return itemDTO.getUnitPrice();
+        }
+        try {
+            return laundryServiceService.getPrice(itemDTO.getServiceType(), itemDTO.getProductType());
+        } catch (RuntimeException ignore) {
+            return null;
         }
     }
 
@@ -298,11 +343,14 @@ public class OrdersService {
         List<OrderItemResponseDTO> items = order.getItems().stream()
                 .map(item -> new OrderItemResponseDTO(
                         item.getId(),
+                        item.getProduct_id(),
+                        item.getProduct_name(),
                         item.getService_type(),
                         item.getProduct_type(),
+                        item.getUom(),
                         item.getQuantity(),
                         item.getPrice(),
-                        item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())).setScale(2, RoundingMode.HALF_UP)
+                        item.getLineTotal().setScale(2, RoundingMode.HALF_UP)
                 ))
                 .toList();
 

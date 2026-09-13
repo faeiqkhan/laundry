@@ -26,6 +26,20 @@ public class ProductService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<ProductResponseDTO> getActiveCatalog() {
+        return productRepository.findAllByActiveTrueOrderByPriorityAscNameAsc().stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductResponseDTO> getCatalogByService(String service) {
+        return productRepository.findAllByServiceAndActiveTrueOrderByPriorityAscNameAsc(service).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
     public ProductResponseDTO createProduct(ProductDTO dto) {
         if (dto.getName() == null || dto.getName().isBlank()) {
@@ -35,10 +49,7 @@ public class ProductService {
             throw new BadRequestException("Price cannot be negative");
         }
         Product product = new Product();
-        product.setName(dto.getName().trim());
-        product.setUnit(dto.getUnit());
-        product.setPrice(dto.getPrice() == null ? BigDecimal.ZERO : dto.getPrice());
-        product.setActive(dto.isActive());
+        apply(product, dto);
         return toResponse(productRepository.save(product));
     }
 
@@ -52,10 +63,7 @@ public class ProductService {
         if (dto.getPrice() == null || dto.getPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw new BadRequestException("Price cannot be negative");
         }
-        product.setName(dto.getName().trim());
-        product.setUnit(dto.getUnit());
-        product.setPrice(dto.getPrice());
-        product.setActive(dto.isActive());
+        apply(product, dto);
         return toResponse(productRepository.save(product));
     }
 
@@ -67,7 +75,19 @@ public class ProductService {
         productRepository.deleteById(id);
     }
 
+    private void apply(Product product, ProductDTO dto) {
+        product.setName(dto.getName().trim());
+        product.setService(dto.getService());
+        product.setCategory(dto.getCategory());
+        product.setPriority(dto.getPriority());
+        product.setUnit(dto.getUnit());
+        product.setPrice(dto.getPrice() == null ? BigDecimal.ZERO : dto.getPrice());
+        product.setActive(dto.isActive());
+    }
+
     private ProductResponseDTO toResponse(Product product) {
-        return new ProductResponseDTO(product.getId(), product.getName(), product.getUnit(), product.getPrice(), product.isActive());
+        return new ProductResponseDTO(product.getId(), product.getName(), product.getService(),
+                product.getCategory(), product.getPriority(), product.getUnit(),
+                product.getPrice(), product.isActive());
     }
 }

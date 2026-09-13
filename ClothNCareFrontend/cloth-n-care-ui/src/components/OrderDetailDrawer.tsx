@@ -215,8 +215,11 @@ export default function OrderDetailDrawer({ order, onClose, onUpdated }: Props) 
                 {visibleItems.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      {item.serviceType}
-                      <div className="muted">{item.productType}</div>
+                      {item.productName || item.serviceType}
+                      <div className="muted">
+                        {item.productName ? item.serviceType : item.productType}
+                        {item.uom ? ` · ${item.uom}` : ""}
+                      </div>
                     </td>
                     <td>{item.quantity}</td>
                     <td>{formatMoney(item.unitPrice)}</td>

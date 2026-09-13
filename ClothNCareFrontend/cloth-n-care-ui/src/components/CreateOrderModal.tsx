@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createCustomer,
   getCustomers,
   type Customer,
 } from "../api/customers";
-import { getServices, type Service } from "../api/services";
+import { getActiveCatalog, type Product } from "../api/products";
 import { createOrder } from "../api/orders";
 import Icon from "./Icons";
 import "./DashboardShell.css";
+import { formatMoney } from "../utils/format";
 
 interface Props {
   onClose: () => void;
@@ -15,20 +16,41 @@ interface Props {
 }
 
 interface OrderItemDraft {
-  service_type: string;
-  product_type: string;
-  quantity: number;
-  unit_price: string;
+  service: string;
+  category: string;
+  productId: string;
+  quantity: string;
 }
 
 const createEmptyItem = (): OrderItemDraft => ({
-  service_type: "",
-  product_type: "",
-  quantity: 1,
-  unit_price: "",
+  service: "",
+  category: "",
+  productId: "",
+  quantity: "",
 });
 
-const uniqueValues = (values: string[]) => Array.from(new Set(values));
+const groupCatalog = (products: Product[]) => {
+  const services = new Map<string, Map<string, Product[]>>();
+  for (const product of products) {
+    const serviceName = product.service || "General";
+    let categories = services.get(serviceName);
+    if (!categories) {
+      categories = new Map<string, Product[]>();
+      services.set(serviceName, categories);
+    }
+    const categoryName = product.category || "General";
+    let list = categories.get(categoryName);
+    if (!list) {
+      list = [];
+      categories.set(categoryName, list);
+    }
+    list.push(product);
+  }
+  return services;
+};
+
+const isWeightUom = (product: Product): boolean =>
+  (product.unit || "").toLowerCase() === "kg";
 
 export default function CreateOrderModal({ onClose, onSuccess }: Props) {
   const [items, setItems] = useState<OrderItemDraft[]>([createEmptyItem()]);
@@ -44,25 +66,22 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
     email: "",
   });
   const [creatingCustomer, setCreatingCustomer] = useState(false);
-  const [services, setServices] = useState<Service[]>([]);
+  const [catalog, setCatalog] = useState<Map<string, Map<string, Product[]>>>(new Map());
   const [loading, setLoading] = useState(false);
   const [discount, setDiscount] = useState("");
   const [deliveryDate, setDeliveryDate] = useState(
     new Date().toISOString().split("T")[0],
   );
 
-  const activeServices = services.filter((service) => service.active);
-  const serviceNames = uniqueValues(
-    activeServices.map((service) => service.name).filter(Boolean),
-  );
+  const serviceNames = useMemo(() => Array.from(catalog.keys()), [catalog]);
 
   useEffect(() => {
     let ignore = false;
 
-    Promise.all([getServices(), getCustomers()])
-      .then(([servicesData, customersData]) => {
+    Promise.all([getActiveCatalog(), getCustomers()])
+      .then(([catalogData, customersData]) => {
         if (!ignore) {
-          setServices(servicesData);
+          setCatalog(groupCatalog(catalogData));
           setCustomers(customersData);
           setFiltered(customersData);
         }
@@ -77,26 +96,22 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
   }, []);
 
   const addItem = () => {
-    setItems((currentItems) => [...currentItems, createEmptyItem()]);
+    setItems((current) => [...current, createEmptyItem()]);
   };
 
   const updateItem = (
     index: number,
     field: keyof OrderItemDraft,
-    value: string | number,
+    value: string,
   ) => {
-    setItems((currentItems) =>
-      currentItems.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item,
-      ),
+    setItems((current) =>
+      current.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
     );
   };
 
   const removeItem = (index: number) => {
-    setItems((currentItems) =>
-      currentItems.length === 1
-        ? currentItems
-        : currentItems.filter((_, itemIndex) => itemIndex !== index),
+    setItems((current) =>
+      current.length === 1 ? current : current.filter((_, i) => i !== index),
     );
   };
 
@@ -134,8 +149,8 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
         email: email || undefined,
       });
 
-      setCustomers((currentCustomers) => [...currentCustomers, created]);
-      setFiltered((currentFiltered) => [...currentFiltered, created]);
+      setCustomers((prev) => [...prev, created]);
+      setFiltered((prev) => [...prev, created]);
       setSelectedCustomer(created);
       setSearch(`${created.name} - ${created.phone}`);
       setShowAddCustomer(false);
@@ -155,21 +170,10 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
       return;
     }
 
-    const hasInvalidItem = items.some(
-      (item) =>
-        !item.service_type ||
-        !item.product_type ||
-        item.quantity <= 0 ||
-        (item.unit_price !== "" && Number(item.unit_price) < 0) ||
-        !activeServices.some(
-          (service) =>
-            service.name === item.service_type &&
-            service.productType === item.product_type,
-        ),
-    );
+    const hasInvalidItem = items.some((item) => !item.productId || !item.quantity || Number(item.quantity) <= 0);
 
     if (hasInvalidItem) {
-      alert("Please select a valid service, product, and quantity for each item");
+      alert("Please select a service, category, product, and valid quantity for each item");
       return;
     }
 
@@ -182,15 +186,27 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
     try {
       setLoading(true);
 
+      const allProducts = Array.from(catalog.values()).flatMap((cats) =>
+        Array.from(cats.values()).flat(),
+      );
+      const productById = new Map(allProducts.map((p) => [p.id, p]));
+
       await createOrder({
         customerId: selectedCustomer.id,
         phone: selectedCustomer.phone,
-        items: items.map((item) => ({
-          service_type: item.service_type,
-          product_type: item.product_type,
-          quantity: item.quantity,
-          unit_price: item.unit_price !== "" ? Number(item.unit_price) : undefined,
-        })),
+        items: items.map((item) => {
+          const product = productById.get(item.productId)!;
+          const qty = Number(item.quantity);
+          return {
+            product_id: product.id,
+            product_name: product.name,
+            service_type: product.service,
+            product_type: product.category,
+            uom: product.unit,
+            quantity: qty,
+            unit_price: product.price,
+          };
+        }),
         expected_delivery_date: deliveryDate,
         discount: discountNum,
       });
@@ -216,7 +232,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
         <div className="modal-header">
           <div>
             <h2 id="create-order-title">Create Order</h2>
-            <p>Select a customer and add services to the order</p>
+            <p>Service → Category → Product (pricing is automatic)</p>
           </div>
           <button type="button" className="icon-button icon-only" onClick={onClose}>
             <Icon name="close" size={18} />
@@ -263,8 +279,8 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                     onClick={() => {
                       setShowAddCustomer(true);
                       setShowDropdown(false);
-                      setNewCustomer((currentCustomer) => ({
-                        ...currentCustomer,
+                      setNewCustomer((prev) => ({
+                        ...prev,
                         name: search.trim(),
                         phone: "",
                       }));
@@ -286,39 +302,27 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                   className="form-input"
                   value={newCustomer.name}
                   onChange={(event) =>
-                    setNewCustomer((currentCustomer) => ({
-                      ...currentCustomer,
-                      name: event.target.value,
-                    }))
+                    setNewCustomer((prev) => ({ ...prev, name: event.target.value }))
                   }
                 />
-
                 <input
                   placeholder="Phone"
                   className="form-input"
                   value={newCustomer.phone}
                   onChange={(event) =>
-                    setNewCustomer((currentCustomer) => ({
-                      ...currentCustomer,
-                      phone: event.target.value,
-                    }))
+                    setNewCustomer((prev) => ({ ...prev, phone: event.target.value }))
                   }
                 />
-
                 <input
                   placeholder="Email (optional)"
                   type="email"
                   className="form-input"
                   value={newCustomer.email}
                   onChange={(event) =>
-                    setNewCustomer((currentCustomer) => ({
-                      ...currentCustomer,
-                      email: event.target.value,
-                    }))
+                    setNewCustomer((prev) => ({ ...prev, email: event.target.value }))
                   }
                 />
               </div>
-
               <div className="new-customer-actions">
                 <button
                   type="button"
@@ -331,7 +335,6 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                 >
                   Cancel
                 </button>
-
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
@@ -345,90 +348,116 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
           )}
 
           <div className="form-field">
-            <label>Services</label>
+            <label>Products</label>
             <div className="modal-items">
-              {items.map((item, index) => (
-                <div key={index} className="modal-item-row">
-                  <select
-                    className="form-input"
-                    value={item.service_type}
-                    onChange={(event) => {
-                      updateItem(index, "service_type", event.target.value);
-                      updateItem(index, "product_type", "");
-                    }}
-                  >
-                    <option value="">Select Service</option>
-                    {serviceNames.map((serviceName) => (
-                      <option key={serviceName} value={serviceName}>
-                        {serviceName}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="form-input"
-                    value={item.product_type}
-                    onChange={(event) => {
-                      const productType = event.target.value;
-                      updateItem(index, "product_type", productType);
-                      const matched = activeServices.find(
-                        (service) =>
-                          service.name === item.service_type &&
-                          service.productType === productType,
-                      );
-                      updateItem(
-                        index,
-                        "unit_price",
-                        matched ? String(matched.price) : "",
-                      );
-                    }}
-                    disabled={!item.service_type}
-                  >
-                    <option value="">Select Product</option>
-                    {activeServices
-                      .filter((service) => service.name === item.service_type)
-                      .map((service) => (
-                        <option key={service.id} value={service.productType}>
-                          {service.productType}
+              {items.map((item, index) => {
+                const categoryNames = item.service
+                  ? Array.from(catalog.get(item.service)?.keys() ?? [])
+                  : [];
+                const productList =
+                  item.service && item.category
+                    ? (catalog.get(item.service)?.get(item.category) ?? [])
+                    : [];
+                const product = productList.find((p) => p.id === item.productId);
+                const weightUom = product ? isWeightUom(product) : false;
+                const lineTotal =
+                  product && item.quantity
+                    ? product.price * Number(item.quantity)
+                    : 0;
+                return (
+                  <div key={index} className="modal-item-row">
+                    <select
+                      className="form-input"
+                      value={item.service}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        const nextCategories = catalog.get(value);
+                        const firstCategory = nextCategories
+                          ? nextCategories.keys().next().value
+                          : "";
+                        updateItem(index, "service", value);
+                        updateItem(index, "category", firstCategory || "");
+                        updateItem(index, "productId", "");
+                        updateItem(index, "quantity", "");
+                      }}
+                    >
+                      <option value="">Service</option>
+                      {serviceNames.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
                         </option>
                       ))}
-                  </select>
+                    </select>
 
-                  <input
-                    type="number"
-                    min="1"
-                    className="form-input quantity-input"
-                    value={item.quantity}
-                    onChange={(event) =>
-                      updateItem(index, "quantity", Number(event.target.value))
-                    }
-                  />
+                    <select
+                      className="form-input"
+                      value={item.category}
+                      onChange={(event) => {
+                        updateItem(index, "category", event.target.value);
+                        updateItem(index, "productId", "");
+                        updateItem(index, "quantity", "");
+                      }}
+                      disabled={!item.service}
+                    >
+                      <option value="">Category</option>
+                      {categoryNames.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
 
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="form-input quantity-input"
-                    placeholder="Price"
-                    style={{ maxWidth: 110 }}
-                    value={item.unit_price}
-                    onChange={(event) =>
-                      updateItem(index, "unit_price", event.target.value)
-                    }
-                    disabled={!item.product_type}
-                    aria-label="Unit price"
-                  />
+                    <select
+                      className="form-input"
+                      value={item.productId}
+                      onChange={(event) => {
+                        updateItem(index, "productId", event.target.value);
+                        if (!item.quantity) {
+                          updateItem(index, "quantity", "1");
+                        }
+                      }}
+                      disabled={!item.category}
+                    >
+                      <option value="">Product</option>
+                      {productList.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} — {p.unit || "Nos"}
+                        </option>
+                      ))}
+                    </select>
 
-                  <button
-                    type="button"
-                    className="icon-button"
-                    onClick={() => removeItem(index)}
-                    disabled={items.length === 1}
-                  >
-                    <Icon name="trash" size={15} />
-                  </button>
-                </div>
-              ))}
+                    <input
+                      type="number"
+                      min={weightUom ? 0 : 1}
+                      step={weightUom ? 0.1 : 1}
+                      className="form-input quantity-input"
+                      value={item.quantity}
+                      onChange={(event) =>
+                        updateItem(index, "quantity", event.target.value)
+                      }
+                      placeholder={weightUom ? "Weight (Kg)" : "Qty"}
+                      aria-label="Quantity"
+                    />
+
+                    <span
+                      style={{ minWidth: 70, textAlign: "right", fontWeight: 700 }}
+                    >
+                      {product && item.quantity
+                        ? formatMoney(lineTotal)
+                        : "—"}
+                    </span>
+
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => removeItem(index)}
+                      disabled={items.length === 1}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
 
             <button type="button" onClick={addItem} className="link-button">
@@ -438,7 +467,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
 
           <div className="form-grid">
             <div className="form-field">
-              <label htmlFor="order-discount">Discount ({`\u20b9`})</label>
+              <label htmlFor="order-discount">Discount</label>
               <input
                 id="order-discount"
                 type="number"

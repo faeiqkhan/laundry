@@ -49,7 +49,13 @@ const getInitials = (name: string) =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
 
-export default function Topbar() {
+export default function Topbar({
+  onToggleSidebar,
+  collapsed,
+}: {
+  onToggleSidebar?: () => void;
+  collapsed?: boolean;
+}) {
   const location = useLocation();
   const token = localStorage.getItem("token");
   const user = token ? decodeTokenClaims(token) : null;
@@ -69,6 +75,18 @@ export default function Topbar() {
   return (
     <header className="topbar">
       <div className="topbar-title">
+        {onToggleSidebar && (
+          <button
+            type="button"
+            className="icon-button sidebar-toggle-btn"
+            onClick={onToggleSidebar}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+          >
+            <Icon name="menu" size={20} />
+          </button>
+        )}
         <h2>{title}</h2>
       </div>
 

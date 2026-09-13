@@ -22,13 +22,13 @@ public class WhatsAppScheduler {
 
     private final OrdersRepository ordersRepository;
     private final WhatsAppNotifier notifier;
-    private final WhatsAppService whatsAppService;
+    private final WhatsAppMessagingService messagingService;
 
     @Scheduled(cron = "0 30 9 * * *")
     @Transactional
     public void advanceOrderStatuses() {
-        if (!whatsAppService.isConfigured()) {
-            log.info("WhatsApp scheduling skipped: WhatsApp not configured");
+        if (!messagingService.isEnabled()) {
+            log.info("WhatsApp scheduling skipped: WhatsApp not enabled");
             return;
         }
 

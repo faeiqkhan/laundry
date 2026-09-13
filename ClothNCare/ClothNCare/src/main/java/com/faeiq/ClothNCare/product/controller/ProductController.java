@@ -31,6 +31,16 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponseUtil.success(productService.getAllProducts(), "Products fetched"));
     }
 
+    @GetMapping("/catalog")
+    public ResponseEntity<ApiResponse<List<ProductResponseDTO>>> getActiveCatalog() {
+        return ResponseEntity.ok(ApiResponseUtil.success(productService.getActiveCatalog(), "Catalog fetched"));
+    }
+
+    @GetMapping("/catalog/service/{service}")
+    public ResponseEntity<ApiResponse<List<ProductResponseDTO>>> getCatalogByService(@PathVariable String service) {
+        return ResponseEntity.ok(ApiResponseUtil.success(productService.getCatalogByService(service), "Catalog fetched"));
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
     public ResponseEntity<ApiResponse<ProductResponseDTO>> createProduct(@RequestBody ProductDTO dto) {

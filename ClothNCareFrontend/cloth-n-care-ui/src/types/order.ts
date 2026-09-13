@@ -2,8 +2,11 @@ export type PaymentMethod = "CASH" | "CARD" | "UPI" | "BANK_TRANSFER" | "OTHER";
 
 export interface OrderItem {
   id: string;
+  productId?: string;
+  productName?: string;
   serviceType: string;
   productType: string;
+  uom?: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;

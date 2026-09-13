@@ -18,6 +18,12 @@ export interface Settings {
   whatsAppWelcomeTemplate: string;
   whatsAppInvoiceTemplate: string;
   whatsAppStatusTemplate: string;
+  whatsAppProvider: string;
+  whatsAppTestMode: boolean;
+  whatsAppTestNumber: string;
+  whatsAppAutoWelcome: boolean;
+  whatsAppAutoInvoice: boolean;
+  whatsAppAutoStatus: boolean;
 }
 
 export interface SettingsPayload {
@@ -38,6 +44,12 @@ export interface SettingsPayload {
   whatsAppWelcomeTemplate?: string;
   whatsAppInvoiceTemplate?: string;
   whatsAppStatusTemplate?: string;
+  whatsAppProvider?: string;
+  whatsAppTestMode?: boolean;
+  whatsAppTestNumber?: string;
+  whatsAppAutoWelcome?: boolean;
+  whatsAppAutoInvoice?: boolean;
+  whatsAppAutoStatus?: boolean;
 }
 
 export const getSettings = async () => {

@@ -7,6 +7,7 @@ import {
 import { isAdmin } from "../utils/auth";
 import DashboardLayout from "../layout/DashboardLayout";
 import Icon from "../components/Icons";
+import WhatsAppConnectionCard from "../components/WhatsAppConnectionCard";
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsData | null>(null);
@@ -63,6 +64,12 @@ export default function SettingsPage() {
         whatsAppWelcomeTemplate: settings.whatsAppWelcomeTemplate,
         whatsAppInvoiceTemplate: settings.whatsAppInvoiceTemplate,
         whatsAppStatusTemplate: settings.whatsAppStatusTemplate,
+        whatsAppProvider: settings.whatsAppProvider,
+        whatsAppTestMode: settings.whatsAppTestMode,
+        whatsAppTestNumber: settings.whatsAppTestNumber,
+        whatsAppAutoWelcome: settings.whatsAppAutoWelcome,
+        whatsAppAutoInvoice: settings.whatsAppAutoInvoice,
+        whatsAppAutoStatus: settings.whatsAppAutoStatus,
       });
 
       setSettings(updated);
@@ -107,8 +114,9 @@ export default function SettingsPage() {
       ) : !admin ? (
         <div className="empty-state">Only administrators can edit settings</div>
       ) : (
-        <div className="settings-card">
-          {error && <div className="form-error">{error}</div>}
+        <>
+          <div className="settings-card">
+            {error && <div className="form-error">{error}</div>}
           {saved && <div className="form-success">Settings saved</div>}
 
           <div className="section-title">
@@ -264,6 +272,24 @@ export default function SettingsPage() {
 
           <div className="form-grid">
             <div className="form-field">
+              <label>Provider</label>
+              <select
+                className="form-input"
+                value={settings.whatsAppProvider ?? "webjs"}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppProvider: event.target.value })
+                }
+              >
+                <option value="webjs">Web client (whatsapp-web.js)</option>
+                <option value="cloudapi">Meta Cloud API</option>
+              </select>
+              <p className="form-hint">
+                Web client uses the Node WhatsApp service and a QR scan. Cloud
+                API uses the Phone Number ID / token above.
+              </p>
+            </div>
+
+            <div className="form-field">
               <label>Phone Number ID</label>
               <input
                 className="form-input"
@@ -301,7 +327,7 @@ export default function SettingsPage() {
             </select>
             <p className="form-hint">
               Free-form works inside WhatsApp&apos;s 24-hour customer window. Use
-              approved templates for messages outside it.
+              approved templates for messages outside it (Cloud API only).
             </p>
           </div>
 
@@ -339,10 +365,85 @@ export default function SettingsPage() {
               />
             </div>
           </div>
+
+          <div className="form-field form-check">
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.whatsAppTestMode ?? true}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppTestMode: event.target.checked })
+                }
+              />
+              Test mode (redirect notifications to a test number)
+            </label>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-field">
+              <label>Test Number</label>
+              <input
+                className="form-input"
+                placeholder="+91 98765 43210"
+                value={settings.whatsAppTestNumber ?? ""}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppTestNumber: event.target.value })
+                }
+              />
+              <p className="form-hint">
+                When test mode is on, every automatic message goes to this
+                number instead of the customer number.
+              </p>
+            </div>
+          </div>
+
+          <div className="section-title">
+            <h3>Automatic Notifications</h3>
+          </div>
           <p className="form-hint">
-            Customers get a welcome message on signup, a text invoice on every
-            order, and automatic status updates on the wash schedule (Day 1
-            wash, Day 2 dry, Day 3 iron, Day 4 ready).
+            All automatic notifications are OFF by default. Turn them on when
+            you are ready to contact real customers. Test mode (above) still
+            redirects them to the test number.
+          </p>
+          <div className="form-field form-check">
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.whatsAppAutoWelcome ?? false}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppAutoWelcome: event.target.checked })
+                }
+              />
+              Send welcome message when a customer is added
+            </label>
+          </div>
+          <div className="form-field form-check">
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.whatsAppAutoInvoice ?? false}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppAutoInvoice: event.target.checked })
+                }
+              />
+              Send a text invoice when an order is created
+            </label>
+          </div>
+          <div className="form-field form-check">
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.whatsAppAutoStatus ?? false}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppAutoStatus: event.target.checked })
+                }
+              />
+              Send automatic status updates (wash schedule Day 1-4)
+            </label>
+          </div>
+          <p className="form-hint">
+            When auto status updates are enabled, customers receive updates as
+            the order advances (Day 1 wash, Day 2 dry, Day 3 iron, Day 4 ready).
           </p>
 
           <div className="settings-actions">
@@ -363,7 +464,10 @@ export default function SettingsPage() {
               percentage of the order subtotal.
             </span>
           </div>
-        </div>
+          </div>
+
+          <WhatsAppConnectionCard />
+        </>
       )}
     </DashboardLayout>
   );

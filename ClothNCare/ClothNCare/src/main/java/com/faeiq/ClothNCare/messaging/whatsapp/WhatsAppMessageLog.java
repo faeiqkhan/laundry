@@ -1,5 +1,6 @@
 package com.faeiq.ClothNCare.messaging.whatsapp;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -22,10 +23,35 @@ public class WhatsAppMessageLog {
 
     private String status;
 
-    @jakarta.persistence.Column(length = 2000)
+    @Column(length = 2000)
     private String body;
 
     private String templateName;
+
+    /** Correlation key used for deduplication, e.g. "CUSTOMER:123" or "ORDER:456:READY". */
+    @Column(length = 200)
+    private String businessKey;
+
+    private String messageType;
+
+    private String customerId;
+
+    private String orderId;
+
+    private String invoiceId;
+
+    private String provider;
+
+    private String providerMessageId;
+
+    @Column(length = 500)
+    private String failureReason;
+
+    private Integer attemptCount = 0;
+
+    private LocalDateTime lastAttemptAt;
+
+    private LocalDateTime nextRetryAt;
 
     private LocalDateTime sentAt = LocalDateTime.now();
 }
