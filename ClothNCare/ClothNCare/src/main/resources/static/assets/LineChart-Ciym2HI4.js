@@ -1,1 +1,0 @@
-import{a as e,n as t}from"./jsx-runtime-m7G7yzlP.js";import{V as n,n as r}from"./BarChart-CakHP9jE.js";var i=e(t()),a=[`axis`],o=(0,i.forwardRef)((e,t)=>i.createElement(r,{chartName:`LineChart`,defaultTooltipEventType:`axis`,validateTooltipEventTypes:a,tooltipPayloadSearcher:n,categoricalChartProps:e,ref:t}));export{o as t};

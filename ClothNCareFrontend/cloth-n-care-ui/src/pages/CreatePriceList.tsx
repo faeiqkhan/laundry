@@ -9,6 +9,7 @@ import {
 } from "../api/priceLists";
 import Icon from "../components/Icons";
 import DashboardLayout from "../layout/DashboardLayout";
+import { uid } from "../utils/format";
 
 interface EntryRow {
   key: string;
@@ -18,7 +19,7 @@ interface EntryRow {
 }
 
 const newEntry = (): EntryRow => ({
-  key: crypto.randomUUID(),
+  key: uid(),
   itemType: "SERVICE",
   itemName: "",
   price: "",

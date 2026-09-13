@@ -4,8 +4,11 @@ import com.faeiq.ClothNCare.charge.entity.ChargeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ChargeTypeRepository extends JpaRepository<ChargeType, String> {
 
     List<ChargeType> findAllByOrderByNameAsc();
+
+    Optional<ChargeType> findByNameIgnoreCase(String name);
 }

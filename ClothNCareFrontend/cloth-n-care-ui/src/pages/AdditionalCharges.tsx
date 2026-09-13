@@ -30,6 +30,7 @@ export default function AdditionalChargesPage() {
       title="Additional Charges"
       subtitle={(count) => `${count} charge types configured`}
       icon="percent"
+      resource="charge-types"
       emptyMessage="No charge types found"
       searchKeys={["name"]}
       fetchAll={getChargeTypes}

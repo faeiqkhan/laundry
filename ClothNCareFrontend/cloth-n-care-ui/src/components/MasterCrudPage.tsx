@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Icon, { type IconName } from "./Icons";
 import DashboardLayout from "../layout/DashboardLayout";
+import ImportExportButtons from "./ImportExportButtons";
+import type { DataResource } from "../api/dataIO";
 
 export interface MasterColumn<T> {
   key: string;
@@ -28,6 +30,8 @@ interface Props<T extends { id: string }, P> {
   ) => ReactNode;
   validate?: (form: P) => string | null;
   deleteMessage?: (row: T) => string;
+  resource?: DataResource;
+  importable?: boolean;
 }
 
 export default function MasterCrudPage<T extends { id: string }, P>({
@@ -46,6 +50,8 @@ export default function MasterCrudPage<T extends { id: string }, P>({
   renderFields,
   validate,
   deleteMessage,
+  resource,
+  importable = true,
 }: Props<T, P>) {
   const [rows, setRows] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,6 +124,13 @@ export default function MasterCrudPage<T extends { id: string }, P>({
         </div>
 
         <div className="page-header-actions">
+          {resource && (
+            <ImportExportButtons
+              resource={resource}
+              importable={importable}
+              onImported={fetchRows}
+            />
+          )}
           <button
             type="button"
             className="btn btn-primary"

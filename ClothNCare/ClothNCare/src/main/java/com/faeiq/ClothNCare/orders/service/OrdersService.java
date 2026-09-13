@@ -6,6 +6,7 @@ import com.faeiq.ClothNCare.common.exception.BadRequestException;
 import com.faeiq.ClothNCare.common.exception.ResourceNotFoundException;
 import com.faeiq.ClothNCare.customer.entity.Customer;
 import com.faeiq.ClothNCare.customer.repository.CustomerRepository;
+import com.faeiq.ClothNCare.messaging.whatsapp.WhatsAppNotifier;
 import com.faeiq.ClothNCare.orders.dto.OrderDTO;
 import com.faeiq.ClothNCare.orders.dto.OrderItemResponseDTO;
 import com.faeiq.ClothNCare.orders.dto.OrderItemsDTO;
@@ -46,6 +47,7 @@ public class OrdersService {
     private final LaundryServiceService laundryServiceService;
     private final InvoiceService invoiceService;
     private final SettingsService settingsService;
+    private final WhatsAppNotifier whatsAppNotifier;
 
     @Transactional
     public OrderResponseDTO createOrder(OrderDTO orderDTO) {
@@ -69,7 +71,9 @@ public class OrdersService {
         BigDecimal subtotal = BigDecimal.ZERO;
 
         for (OrderItemsDTO itemDTO : orderDTO.getItems()) {
-            BigDecimal unitPrice = laundryServiceService.getPrice(itemDTO.getServiceType(), itemDTO.getProductType());
+            BigDecimal unitPrice = itemDTO.getUnitPrice() != null && itemDTO.getUnitPrice().compareTo(BigDecimal.ZERO) > 0
+                    ? itemDTO.getUnitPrice()
+                    : laundryServiceService.getPrice(itemDTO.getServiceType(), itemDTO.getProductType());
 
             OrdersItems item = new OrdersItems();
             item.setOrders(order);
@@ -103,6 +107,8 @@ public class OrdersService {
         Orders savedOrder = ordersRepository.save(order);
         String invoiceUrl = invoiceService.generateInvoice(savedOrder.getId()).getInvoiceUrl();
 
+        whatsAppNotifier.notifyOrderCreated(savedOrder);
+
         return toResponse(savedOrder, invoiceUrl);
     }
 
@@ -126,6 +132,7 @@ public class OrdersService {
         }
 
         order.setStatus(status);
+        whatsAppNotifier.notifyStatusChanged(order, current);
         return toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId()));
     }
 
@@ -239,6 +246,9 @@ public class OrdersService {
             }
             if (item.getQuantity() <= 0) {
                 throw new BadRequestException("Item quantity must be greater than zero");
+            }
+            if (item.getUnitPrice() != null && item.getUnitPrice().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BadRequestException("Unit price cannot be negative");
             }
         }
     }

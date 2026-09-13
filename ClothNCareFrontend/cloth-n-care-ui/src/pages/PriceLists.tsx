@@ -6,6 +6,7 @@ import {
   getPriceLists,
   type PriceList,
 } from "../api/priceLists";
+import ImportExportButtons from "../components/ImportExportButtons";
 import Icon from "../components/Icons";
 import DashboardLayout from "../layout/DashboardLayout";
 import { formatMoney } from "../utils/format";
@@ -93,6 +94,10 @@ export default function PriceListsPage() {
           <p>{priceLists.length} rate cards configured</p>
         </div>
         <div className="page-header-actions">
+          <ImportExportButtons
+            resource="price-lists"
+            onImported={() => fetchPriceLists().catch((error) => console.error(error))}
+          />
           <button
             type="button"
             className="btn btn-primary"

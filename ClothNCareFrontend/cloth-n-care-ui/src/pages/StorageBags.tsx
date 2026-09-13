@@ -41,6 +41,7 @@ export default function StorageBagsPage() {
       title="Storage Bags"
       subtitle={(count) => `${count} bags configured`}
       icon="bag"
+      resource="bags"
       emptyMessage="No storage bags found"
       searchKeys={["bagNumber", "size", "notes"]}
       fetchAll={getBags}

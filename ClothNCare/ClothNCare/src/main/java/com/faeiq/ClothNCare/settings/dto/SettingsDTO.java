@@ -16,4 +16,11 @@ public class SettingsDTO {
     private BigDecimal taxRate;
     private String invoiceFooter;
     private String termsAndConditions;
+    private Boolean whatsAppEnabled;
+    private String whatsAppPhoneNumberId;
+    private String whatsAppAccessToken;
+    private String whatsAppMode;
+    private String whatsAppWelcomeTemplate;
+    private String whatsAppInvoiceTemplate;
+    private String whatsAppStatusTemplate;
 }

@@ -8,6 +8,7 @@ import {
 } from "../api/expenses";
 import { getExpenseHeads, type ExpenseHead } from "../api/expenseHeads";
 import DashboardLayout from "../layout/DashboardLayout";
+import ImportExportButtons from "../components/ImportExportButtons";
 import Icon from "../components/Icons";
 import { formatDate, formatMoney, todayISO } from "../utils/format";
 
@@ -268,6 +269,10 @@ export default function ExpensesPage() {
         </div>
 
         <div className="page-header-actions">
+          <ImportExportButtons
+            resource="expenses"
+            onImported={() => fetchExpenses().catch((err) => console.error(err))}
+          />
           <select
             className="filter-select"
             value={range}

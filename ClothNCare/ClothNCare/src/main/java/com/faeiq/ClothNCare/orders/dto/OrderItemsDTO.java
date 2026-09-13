@@ -3,6 +3,8 @@ package com.faeiq.ClothNCare.orders.dto;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Data
 public class OrderItemsDTO {
 
@@ -13,4 +15,7 @@ public class OrderItemsDTO {
     private String productType;
 
     private int quantity;
+
+    @JsonAlias("unit_price")
+    private BigDecimal unitPrice;
 }

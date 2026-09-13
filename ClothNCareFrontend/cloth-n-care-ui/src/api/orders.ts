@@ -5,6 +5,7 @@ export interface OrderItemPayload {
   service_type: string;
   product_type: string;
   quantity: number;
+  unit_price?: number;
 }
 
 export interface CreateOrderPayload {

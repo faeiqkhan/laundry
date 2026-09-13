@@ -28,6 +28,7 @@ export default function StorageRacksPage() {
       title="Storage Racks"
       subtitle={(count) => `${count} racks configured`}
       icon="shelves"
+      resource="racks"
       emptyMessage="No storage racks found"
       searchKeys={["name", "location", "notes"]}
       fetchAll={getRacks}

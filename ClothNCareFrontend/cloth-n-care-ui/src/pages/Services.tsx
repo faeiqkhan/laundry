@@ -5,6 +5,7 @@ import {
   type Service,
 } from "../api/services";
 import CreateServiceModal from "../components/CreateServiceModal";
+import ImportExportButtons from "../components/ImportExportButtons";
 import Icon from "../components/Icons";
 import DashboardLayout from "../layout/DashboardLayout";
 import { formatMoney } from "../utils/format";
@@ -80,6 +81,10 @@ export default function ServicesPage() {
         </div>
 
         <div className="page-header-actions">
+          <ImportExportButtons
+            resource="services"
+            onImported={() => fetchServices().catch((error) => console.error(error))}
+          />
           <button
             type="button"
             className="btn btn-primary"

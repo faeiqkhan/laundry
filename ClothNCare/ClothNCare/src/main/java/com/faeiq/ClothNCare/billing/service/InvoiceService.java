@@ -5,20 +5,13 @@ import com.faeiq.ClothNCare.common.exception.InvoiceGenerationException;
 import com.faeiq.ClothNCare.common.exception.ResourceNotFoundException;
 import com.faeiq.ClothNCare.orders.entity.Orders;
 import com.faeiq.ClothNCare.orders.entity.OrdersItems;
-import com.faeiq.ClothNCare.orders.entity.Payment;
 import com.faeiq.ClothNCare.orders.repository.OrdersRepository;
 import com.faeiq.ClothNCare.settings.entity.AppSettings;
 import com.faeiq.ClothNCare.settings.service.SettingsService;
-import com.google.zxing.BarcodeFormat;
-import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
-import com.google.zxing.common.BitMatrix;
-import com.google.zxing.qrcode.QRCodeWriter;
 import com.lowagie.text.Document;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
-import com.lowagie.text.Image;
-import com.lowagie.text.PageSize;
+import com.lowagie.text.FontFactory;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.Phrase;
 import com.lowagie.text.Rectangle;
@@ -29,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.awt.image.BufferedImage;
+import java.awt.Color;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -37,8 +30,6 @@ import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -48,18 +39,17 @@ public class InvoiceService {
     private static final String INVOICE_URL_PREFIX = "/invoices/";
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy");
+    private static final DateTimeFormatter DATE_TIME_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy hh:mm a");
 
-    private static final Font HEADER_FONT = new Font(Font.HELVETICA, 22, Font.BOLD);
-    private static final Font TAGLINE_FONT = new Font(Font.HELVETICA, 11, Font.ITALIC);
-    private static final Font SECTION_FONT = new Font(Font.HELVETICA, 12, Font.BOLD);
-    private static final Font NORMAL_FONT = new Font(Font.HELVETICA, 10, Font.NORMAL);
-    private static final Font SMALL_FONT = new Font(Font.HELVETICA, 8, Font.NORMAL);
-    private static final Font BOLD_FONT = new Font(Font.HELVETICA, 10, Font.BOLD);
+    // 80mm thermal receipt (227pt wide), tall page so the whole bill flows onto one sheet
+    private static final Rectangle RECEIPT_PAGE = new Rectangle(227f, 3600f);
 
-    private static final java.awt.Color ACCENT = new java.awt.Color(30, 96, 163);
-    private static final java.awt.Color DARK = new java.awt.Color(51, 51, 51);
-    private static final java.awt.Color LIGHT_GRAY = new java.awt.Color(243, 245, 248);
-    private static final java.awt.Color BORDER_GRAY = new java.awt.Color(210, 214, 220);
+    private static final Font BRAND_FONT = FontFactory.getFont(FontFactory.COURIER, 16f, Font.BOLD, Color.BLACK);
+    private static final Font TAGLINE_FONT = FontFactory.getFont(FontFactory.COURIER, 8f, Font.BOLD, Color.BLACK);
+    private static final Font BOLD_FONT = FontFactory.getFont(FontFactory.COURIER, 9f, Font.BOLD, Color.BLACK);
+    private static final Font NORMAL_FONT = FontFactory.getFont(FontFactory.COURIER, 9f, Font.NORMAL, Color.BLACK);
+    private static final Font SMALL_FONT = FontFactory.getFont(FontFactory.COURIER, 8f, Font.NORMAL, Color.BLACK);
+    private static final Font BIG_FONT = FontFactory.getFont(FontFactory.COURIER, 12f, Font.BOLD, Color.BLACK);
 
     private final OrdersRepository ordersRepository;
     private final SettingsService settingsService;
@@ -73,21 +63,17 @@ public class InvoiceService {
             Files.createDirectories(Path.of(INVOICE_DIR));
 
             String filePath = INVOICE_DIR + getInvoiceFileName(order.getId());
-            Document document = new Document(PageSize.A4, 36, 36, 40, 40);
+            Document document = new Document(RECEIPT_PAGE, 18, 18, 24, 20);
             PdfWriter.getInstance(document, new FileOutputStream(filePath));
             document.open();
 
             AppSettings settings = settingsService.getSettings();
-            String currency = settings.getCurrencyCode() == null || settings.getCurrencyCode().isBlank()
-                    ? "INR" : settings.getCurrencyCode();
 
-            buildHeader(document, settings);
-            buildMetaAndBillTo(document, order, settings);
-            buildItemsTable(document, order, currency);
-            buildTotals(document, order, currency);
-            buildPayments(document, order, currency);
-            buildTerms(document, settings);
-            buildFooter(document, order, settings, currency);
+            buildStoreHeader(document, settings);
+            buildMetaAndBillTo(document, order);
+            buildItemsTable(document, order);
+            buildTotals(document, order, settings);
+            buildTermsAndSign(document, settings);
 
             document.close();
 
@@ -97,286 +83,215 @@ public class InvoiceService {
         }
     }
 
-    private void buildHeader(Document document, AppSettings settings) {
+    private void buildStoreHeader(Document document, AppSettings settings) {
         String businessName = settings.getBusinessName() == null || settings.getBusinessName().isBlank()
                 ? "Cloth n Care" : settings.getBusinessName();
 
-        Paragraph name = new Paragraph(businessName, HEADER_FONT);
+        Paragraph name = new Paragraph(businessName, BRAND_FONT);
+        name.setAlignment(Element.ALIGN_CENTER);
         name.setSpacingAfter(2);
         document.add(name);
 
         if (settings.getTagline() != null && !settings.getTagline().isBlank()) {
-            Paragraph tagline = new Paragraph(settings.getTagline(), TAGLINE_FONT);
-            tagline.setSpacingAfter(6);
-            document.add(tagline);
-        }
-
-        StringBuilder contact = new StringBuilder();
-        if (settings.getPhone() != null && !settings.getPhone().isBlank()) {
-            contact.append("Phone: ").append(settings.getPhone());
-        }
-        if (settings.getEmail() != null && !settings.getEmail().isBlank()) {
-            if (contact.length() > 0) contact.append("  |  ");
-            contact.append("Email: ").append(settings.getEmail());
+            addCentered(document, settings.getTagline(), TAGLINE_FONT);
         }
         if (settings.getAddress() != null && !settings.getAddress().isBlank()) {
-            if (contact.length() > 0) contact.append("  |  ");
-            contact.append(settings.getAddress());
+            addCentered(document, settings.getAddress(), NORMAL_FONT);
         }
-        if (contact.length() > 0) {
-            Paragraph contactLine = new Paragraph(contact.toString(), NORMAL_FONT);
-            contactLine.setSpacingAfter(10);
-            document.add(contactLine);
+        if (settings.getPhone() != null && !settings.getPhone().isBlank()) {
+            addCentered(document, "Ph: " + settings.getPhone(), NORMAL_FONT);
+        }
+        if (settings.getEmail() != null && !settings.getEmail().isBlank()) {
+            addCentered(document, settings.getEmail(), NORMAL_FONT);
         }
 
-        PdfPCell rule = new PdfPCell(new Phrase(" ", new Font(Font.HELVETICA, 1)));
-        rule.setBorderWidthTop(2);
-        rule.setBorderWidthLeft(0);
-        rule.setBorderWidthRight(0);
-        rule.setBorderWidthBottom(0);
-        rule.setBorderColor(ACCENT);
-        rule.setFixedHeight(2);
-        PdfPTable ruleTable = new PdfPTable(1);
-        ruleTable.setWidthPercentage(100);
-        ruleTable.setSpacingAfter(12);
-        ruleTable.addCell(rule);
-        document.add(ruleTable);
+        addDivider(document);
     }
 
-    private void buildMetaAndBillTo(Document document, Orders order, AppSettings settings) {
-        PdfPTable table = new PdfPTable(2);
-        table.setWidthPercentage(100);
-        table.setSpacingAfter(10);
-
-        PdfPCell billTo = new PdfPCell();
-        billTo.setBorder(Rectangle.NO_BORDER);
-        billTo.addElement(new Paragraph("BILL TO", SECTION_FONT));
-        if (order.getCustomer() != null) {
-            billTo.addElement(new Paragraph(order.getCustomer().getName(), BOLD_FONT));
-            if (order.getCustomer().getAddress() != null && !order.getCustomer().getAddress().isBlank()) {
-                billTo.addElement(new Paragraph(order.getCustomer().getAddress(), NORMAL_FONT));
-            }
-            if (order.getCustomer().getPhone() != null && !order.getCustomer().getPhone().isBlank()) {
-                billTo.addElement(new Paragraph("Phone: " + order.getCustomer().getPhone(), NORMAL_FONT));
-            }
-            if (order.getCustomer().getEmail() != null && !order.getCustomer().getEmail().isBlank()) {
-                billTo.addElement(new Paragraph("Email: " + order.getCustomer().getEmail(), NORMAL_FONT));
-            }
-        }
-        table.addCell(billTo);
-
-        PdfPCell meta = new PdfPCell();
-        meta.setBorder(Rectangle.NO_BORDER);
-        meta.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        meta.addElement(new Paragraph("INVOICE", new Font(Font.HELVETICA, 16, Font.BOLD, ACCENT)));
-        String invoiceNumber = order.getInvoice_number() == null ? "N/A" : order.getInvoice_number();
-        meta.addElement(new Paragraph("Invoice No: " + invoiceNumber, NORMAL_FONT));
+    private void buildMetaAndBillTo(Document document, Orders order) {
+        addMetaRow(document, "Invoice No", order.getInvoice_number() == null ? "N/A" : order.getInvoice_number());
         if (order.getCreated_at() != null) {
-            meta.addElement(new Paragraph("Date: " + order.getCreated_at().format(DATE_FMT), NORMAL_FONT));
+            addMetaRow(document, "Date", order.getCreated_at().format(DATE_TIME_FMT));
         }
         if (order.getExpected_delivery_date() != null) {
-            meta.addElement(new Paragraph("Expected Delivery: " + order.getExpected_delivery_date().format(DATE_FMT), NORMAL_FONT));
+            addMetaRow(document, "Delivery", order.getExpected_delivery_date().format(DATE_FMT));
         }
-        if (order.getStatus() != null) {
-            meta.addElement(new Paragraph("Status: " + order.getStatus(), NORMAL_FONT));
-        }
-        table.addCell(meta);
+        addDivider(document);
 
-        document.add(table);
+        if (order.getCustomer() != null) {
+            addLine(document, order.getCustomer().getName(), BOLD_FONT);
+            if (order.getCustomer().getAddress() != null && !order.getCustomer().getAddress().isBlank()) {
+                addLine(document, order.getCustomer().getAddress(), NORMAL_FONT);
+            }
+            if (order.getCustomer().getPhone() != null && !order.getCustomer().getPhone().isBlank()) {
+                addLine(document, "Mobile : " + order.getCustomer().getPhone(), NORMAL_FONT);
+            }
+        }
+        if (order.getCreatedBy() != null) {
+            addLine(document, "Created By : " + order.getCreatedBy().getName(), NORMAL_FONT);
+        }
+
+        addDivider(document);
     }
 
-    private void buildItemsTable(Document document, Orders order, String currency) {
+    private void buildItemsTable(Document document, Orders order) {
         PdfPTable table = new PdfPTable(4);
         table.setWidthPercentage(100);
-        table.setWidths(new float[]{5f, 1.2f, 1.8f, 2f});
-        table.setSpacingBefore(4);
-        table.setSpacingAfter(8);
+        table.setWidths(new float[]{3.2f, 0.8f, 1.1f, 1.3f});
+        table.setSpacingBefore(2);
+        table.setSpacingAfter(4);
 
-        addCell(table, "ITEM", true);
-        addCell(table, "QTY", true);
-        addCell(table, "RATE (" + currency + ")", true);
-        addCell(table, "AMOUNT (" + currency + ")", true);
+        addItemCell(table, "Product Name", Element.ALIGN_LEFT, true);
+        addItemCell(table, "Qty", Element.ALIGN_CENTER, true);
+        addItemCell(table, "Price", Element.ALIGN_RIGHT, true);
+        addItemCell(table, "Total", Element.ALIGN_RIGHT, true);
 
         for (OrdersItems item : order.getItems()) {
-            String desc = item.getService_type() + (item.getProduct_type() != null ? " - " + item.getProduct_type() : "");
-            addCell(table, desc, false);
-            addCell(table, String.valueOf(item.getQuantity()), false);
-            addCell(table, fmt(item.getPrice()), false);
-            BigDecimal lineTotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()))
+            String desc = item.getService_type()
+                    + (item.getProduct_type() != null ? " - " + item.getProduct_type() : "");
+            BigDecimal lineTotal = item.getPrice()
+                    .multiply(BigDecimal.valueOf(item.getQuantity()))
                     .setScale(2, RoundingMode.HALF_UP);
-            addCell(table, fmt(lineTotal), false);
+            addItemCell(table, desc, Element.ALIGN_LEFT, false);
+            addItemCell(table, String.valueOf(item.getQuantity()), Element.ALIGN_CENTER, false);
+            addItemCell(table, fmt(item.getPrice()), Element.ALIGN_RIGHT, false);
+            addItemCell(table, fmt(lineTotal), Element.ALIGN_RIGHT, false);
         }
 
         document.add(table);
+        addDivider(document);
     }
 
-    private void buildTotals(Document document, Orders order, String currency) {
-        PdfPTable table = new PdfPTable(2);
-        table.setWidthPercentage(100);
-        table.setWidths(new float[]{5f, 2.5f});
-        table.setSpacingAfter(8);
+    private void buildTotals(Document document, Orders order, AppSettings settings) {
+        String symbol = currencySymbol(settings);
 
-        PdfPCell spacer = new PdfPCell(new Phrase(" "));
-        spacer.setBorder(Rectangle.NO_BORDER);
-        table.addCell(spacer);
-
-        PdfPTable totals = new PdfPTable(2);
-        totals.setWidthPercentage(100);
-        totals.setWidths(new float[]{1.5f, 1f});
+        int totalQty = order.getItems().stream()
+                .mapToInt(OrdersItems::getQuantity)
+                .sum();
+        addTotalRow(document, "Total Qty", String.valueOf(totalQty), false);
 
         BigDecimal subtotal = order.getItems().stream()
                 .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        addTotalRow(document, "Sub Total", money(subtotal, symbol), false);
 
-        addTotalRow(totals, "Subtotal", fmt(subtotal), false);
         if (order.getDiscount() != null && order.getDiscount().compareTo(BigDecimal.ZERO) > 0) {
-            addTotalRow(totals, "Discount", "-" + fmt(order.getDiscount()), false);
+            addTotalRow(document, "Discount", "-" + money(order.getDiscount(), symbol), false);
         }
         if (order.getTax_amount() != null && order.getTax_amount().compareTo(BigDecimal.ZERO) > 0) {
-            addTotalRow(totals, "Tax", fmt(order.getTax_amount()), false);
+            addTotalRow(document, "Tax", money(order.getTax_amount(), symbol), false);
         }
-        addTotalRow(totals, "Grand Total", fmt(order.getTotal_price()), true);
-        if (order.getPaid_amount() != null && order.getPaid_amount().compareTo(BigDecimal.ZERO) > 0) {
-            addTotalRow(totals, "Paid", "-" + fmt(order.getPaid_amount()), false);
-        }
-        BigDecimal due = order.getBalanceDue();
-        addTotalRow(totals, "Balance Due", fmt(due), true);
 
-        table.addCell(totals);
-        document.add(table);
+        addTotalRow(document, "Bill Amount", money(order.getTotal_price(), symbol), true);
+        addTotalRow(document, "Total Payable", money(order.getBalanceDue(), symbol), true);
     }
 
-    private void buildPayments(Document document, Orders order, String currency) {
-        if (order.getPayments() == null || order.getPayments().isEmpty()) {
-            return;
-        }
-
-        document.add(new Paragraph("PAYMENTS RECEIVED", SECTION_FONT));
-
-        PdfPTable table = new PdfPTable(4);
-        table.setWidthPercentage(100);
-        table.setWidths(new float[]{2f, 1.5f, 2f, 2.5f});
-        table.setSpacingBefore(4);
-        table.setSpacingAfter(8);
-
-        addCell(table, "DATE", true);
-        addCell(table, "AMOUNT (" + currency + ")", true);
-        addCell(table, "METHOD", true);
-        addCell(table, "RECORDED BY", true);
-
-        for (Payment payment : order.getPayments()) {
-            addCell(table, payment.getPaidAt() != null ? payment.getPaidAt().format(DATE_FMT) : "", false);
-            addCell(table, fmt(payment.getAmount()), false);
-            addCell(table, payment.getMethod() != null ? payment.getMethod().toString() : "", false);
-            addCell(table, payment.getRecordedBy() != null ? payment.getRecordedBy().getName() : "", false);
-        }
-
-        document.add(table);
-    }
-
-    private void buildTerms(Document document, AppSettings settings) {
-        if (settings.getTermsAndConditions() == null || settings.getTermsAndConditions().isBlank()) {
-            return;
-        }
-        document.add(new Paragraph("TERMS & CONDITIONS", SECTION_FONT));
-        for (String line : settings.getTermsAndConditions().split("\n")) {
-            if (!line.isBlank()) {
-                Paragraph term = new Paragraph(line.trim(), SMALL_FONT);
-                term.setSpacingAfter(1);
-                document.add(term);
+    private void buildTermsAndSign(Document document, AppSettings settings) {
+        if (settings.getTermsAndConditions() != null && !settings.getTermsAndConditions().isBlank()) {
+            Paragraph heading = new Paragraph("Terms & Conditions", BOLD_FONT);
+            heading.setSpacingBefore(6);
+            heading.setSpacingAfter(2);
+            document.add(heading);
+            for (String line : settings.getTermsAndConditions().split("\n")) {
+                if (!line.isBlank()) {
+                    addLine(document, line.trim(), SMALL_FONT);
+                }
             }
         }
-        PdfPTable rule = new PdfPTable(1);
-        rule.setWidthPercentage(100);
-        rule.setSpacingBefore(6);
-        PdfPCell divider = new PdfPCell(new Phrase(" ", new Font(Font.HELVETICA, 1)));
-        divider.setBorderWidthTop(0.5f);
-        divider.setBorderWidthLeft(0);
-        divider.setBorderWidthRight(0);
-        divider.setBorderWidthBottom(0);
-        divider.setBorderColor(BORDER_GRAY);
-        divider.setFixedHeight(1);
-        rule.addCell(divider);
-        document.add(rule);
-    }
 
-    private void buildFooter(Document document, Orders order, AppSettings settings, String currency)
-            throws WriterException, IOException {
-        PdfPTable footer = new PdfPTable(2);
-        footer.setWidthPercentage(100);
-        footer.setWidths(new float[]{1.5f, 1f});
-        footer.setSpacingBefore(6);
+        addDivider(document);
 
-        PdfPCell textCell = new PdfPCell();
-        textCell.setBorder(Rectangle.NO_BORDER);
-        textCell.setVerticalAlignment(Element.ALIGN_BOTTOM);
+        PdfPTable sign = new PdfPTable(2);
+        sign.setWidthPercentage(100);
+        sign.setWidths(new float[]{1f, 2f});
+        sign.setSpacingAfter(4);
+
+        PdfPCell label = new PdfPCell(new Phrase("Customer Sign :", BOLD_FONT));
+        label.setBorder(Rectangle.NO_BORDER);
+        label.setPaddingTop(12);
+        label.setPaddingBottom(8);
+        sign.addCell(label);
+
+        PdfPCell line = new PdfPCell(new Phrase(" "));
+        line.setBorder(Rectangle.BOTTOM);
+        line.setBorderWidth(0.8f);
+        line.setPaddingTop(12);
+        line.setPaddingBottom(8);
+        sign.addCell(line);
+
+        document.add(sign);
 
         if (settings.getInvoiceFooter() != null && !settings.getInvoiceFooter().isBlank()) {
-            Paragraph thanks = new Paragraph(settings.getInvoiceFooter(), BOLD_FONT);
-            thanks.setSpacingAfter(6);
-            textCell.addElement(thanks);
+            addCentered(document, settings.getInvoiceFooter(), BOLD_FONT);
         }
-
-        String qrPayload = "INVOICE\n"
-                + "Invoice No: " + (order.getInvoice_number() == null ? "N/A" : order.getInvoice_number())
-                + "\nTotal: " + currency + " " + fmt(order.getTotal_price())
-                + "\nPaid: " + currency + " " + fmt(order.getPaid_amount())
-                + "\nBalance Due: " + currency + " " + fmt(order.getBalanceDue());
-        Image qr = generateQr(qrPayload, 90);
-        PdfPCell qrCell = new PdfPCell();
-        qrCell.setBorder(Rectangle.NO_BORDER);
-        qrCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        qrCell.setVerticalAlignment(Element.ALIGN_BOTTOM);
-        qrCell.addElement(qr);
-        qrCell.addElement(new Paragraph("Scan for invoice details", SMALL_FONT));
-
-        footer.addCell(textCell);
-        footer.addCell(qrCell);
-        document.add(footer);
     }
 
-    private Image generateQr(String content, int size) throws WriterException, IOException {
-        Map<com.google.zxing.EncodeHintType, Object> hints = new HashMap<>();
-        hints.put(com.google.zxing.EncodeHintType.MARGIN, 0);
-        BitMatrix matrix = new QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size, hints);
-        BufferedImage buffered = MatrixToImageWriter.toBufferedImage(matrix);
-        Image qr = Image.getInstance(buffered, null);
-        qr.scaleToFit(size, size);
-        return qr;
+    private void addMetaRow(Document document, String label, String value) {
+        Paragraph paragraph = new Paragraph(label + " : " + value, NORMAL_FONT);
+        paragraph.setSpacingAfter(2);
+        document.add(paragraph);
     }
 
-    private void addCell(PdfPTable table, String text, boolean header) {
+    private void addLine(Document document, String text, Font font) {
+        Paragraph paragraph = new Paragraph(text, font);
+        paragraph.setSpacingAfter(2);
+        document.add(paragraph);
+    }
+
+    private void addCentered(Document document, String text, Font font) {
+        Paragraph paragraph = new Paragraph(text, font);
+        paragraph.setAlignment(Element.ALIGN_CENTER);
+        paragraph.setSpacingAfter(2);
+        document.add(paragraph);
+    }
+
+    private void addTotalRow(Document document, String label, String value, boolean emphasize) {
+        Paragraph row = new Paragraph(label + " :   " + value, emphasize ? BIG_FONT : NORMAL_FONT);
+        row.setAlignment(Element.ALIGN_RIGHT);
+        row.setSpacingBefore(emphasize ? 3 : 0);
+        row.setSpacingAfter(3);
+        document.add(row);
+    }
+
+    private void addDivider(Document document) {
+        PdfPTable line = new PdfPTable(1);
+        line.setWidthPercentage(100);
+        line.setSpacingAfter(3);
+        PdfPCell cell = new PdfPCell(new Phrase(" "));
+        cell.setBorder(Rectangle.BOTTOM);
+        cell.setBorderWidth(0.5f);
+        cell.setPadding(0);
+        cell.setFixedHeight(2);
+        line.addCell(cell);
+        document.add(line);
+    }
+
+    private void addItemCell(PdfPTable table, String text, int alignment, boolean header) {
         PdfPCell cell = new PdfPCell(new Phrase(text, header ? BOLD_FONT : NORMAL_FONT));
-        cell.setPadding(6);
-        cell.setHorizontalAlignment(Element.ALIGN_LEFT);
-        if (header) {
-            cell.setBackgroundColor(ACCENT);
-            cell.setBorderColor(ACCENT);
-        } else {
-            cell.setBorderColor(BORDER_GRAY);
-            cell.setPaddingTop(4);
-            cell.setPaddingBottom(4);
-        }
+        cell.setBorder(Rectangle.BOTTOM);
+        cell.setBorderWidth(0.4f);
+        cell.setPadding(3);
+        cell.setHorizontalAlignment(alignment);
         table.addCell(cell);
     }
 
-    private void addTotalRow(PdfPTable table, String label, String value, boolean emphasize) {
-        Font labelFont = emphasize ? BOLD_FONT : NORMAL_FONT;
-        Font valueFont = emphasize ? BOLD_FONT : NORMAL_FONT;
-        PdfPCell lc = new PdfPCell(new Phrase(label, labelFont));
-        lc.setBorder(Rectangle.NO_BORDER);
-        lc.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        lc.setPadding(2);
-        PdfPCell vc = new PdfPCell(new Phrase(value, valueFont));
-        vc.setBorder(Rectangle.NO_BORDER);
-        vc.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        vc.setPadding(2);
-        if (emphasize) {
-            lc.setBackgroundColor(LIGHT_GRAY);
-            vc.setBackgroundColor(LIGHT_GRAY);
+    private String currencySymbol(AppSettings settings) {
+        String code = settings.getCurrencyCode() == null || settings.getCurrencyCode().isBlank()
+                ? "INR" : settings.getCurrencyCode();
+        if ("INR".equalsIgnoreCase(code)) {
+            return "\u20B9"; // ₹
         }
-        table.addCell(lc);
-        table.addCell(vc);
+        if ("USD".equalsIgnoreCase(code)) {
+            return "$";
+        }
+        if ("EUR".equalsIgnoreCase(code)) {
+            return "\u20AC"; // €
+        }
+        return code + " ";
+    }
+
+    private String money(BigDecimal value, String symbol) {
+        return symbol + fmt(value);
     }
 
     private String fmt(BigDecimal value) {

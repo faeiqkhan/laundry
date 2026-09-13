@@ -11,6 +11,7 @@ import {
 } from "../api/users";
 import { decodeToken, isAdmin } from "../utils/auth";
 import DashboardLayout from "../layout/DashboardLayout";
+import ImportExportButtons from "../components/ImportExportButtons";
 import Icon from "../components/Icons";
 
 const ROLE_BADGE: Record<UserRole, string> = {
@@ -270,6 +271,10 @@ export default function StaffPage() {
         </div>
 
         <div className="page-header-actions">
+          <ImportExportButtons
+            resource="users"
+            onImported={() => fetchUsers().catch((err) => console.error(err))}
+          />
           <button
             type="button"
             className="btn btn-primary"

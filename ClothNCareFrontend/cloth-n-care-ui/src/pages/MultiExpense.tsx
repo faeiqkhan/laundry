@@ -6,8 +6,9 @@ import {
 } from "../api/expenses";
 import { getExpenseHeads, type ExpenseHead } from "../api/expenseHeads";
 import DashboardLayout from "../layout/DashboardLayout";
+import ImportExportButtons from "../components/ImportExportButtons";
 import Icon from "../components/Icons";
-import { todayISO } from "../utils/format";
+import { todayISO, uid } from "../utils/format";
 
 interface ExpenseRow {
   key: string;
@@ -19,7 +20,7 @@ interface ExpenseRow {
 }
 
 const newRow = (): ExpenseRow => ({
-  key: crypto.randomUUID(),
+  key: uid(),
   category: "",
   expenseHeadId: undefined,
   description: "",
@@ -113,6 +114,7 @@ export default function MultiExpensePage() {
           <p>Add several expenses at once</p>
         </div>
         <div className="page-header-actions">
+          <ImportExportButtons resource="expenses" />
           <button
             type="button"
             className="btn btn-secondary"

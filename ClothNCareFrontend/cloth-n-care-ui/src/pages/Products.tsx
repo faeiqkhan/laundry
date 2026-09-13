@@ -29,6 +29,7 @@ export default function ProductsPage() {
       title="Products"
       subtitle={(count) => `${count} products configured`}
       icon="box"
+      resource="products"
       emptyMessage="No products found"
       searchKeys={["name", "unit"]}
       fetchAll={getProducts}

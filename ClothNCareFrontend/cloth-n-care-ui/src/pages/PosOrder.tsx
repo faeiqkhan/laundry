@@ -7,12 +7,14 @@ import Icon from "../components/Icons";
 import type { Order, PaymentMethod } from "../types/order";
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS } from "../types/order";
 import { formatMoney } from "../utils/format";
+import { uid } from "../utils/format";
 import { downloadInvoice } from "../utils/invoice";
 
 interface CartItem {
   key: string;
   service: Service;
   quantity: number;
+  price: number;
 }
 
 const tomorrowISO = (): string => {
@@ -58,11 +60,7 @@ export default function PosOrderPage() {
   }, []);
 
   const subtotal = useMemo(
-    () =>
-      cart.reduce(
-        (sum, item) => sum + item.service.price * item.quantity,
-        0,
-      ),
+    () => cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [cart],
   );
 
@@ -83,8 +81,22 @@ export default function PosOrderPage() {
             : item,
         );
       }
-      return [...current, { key: crypto.randomUUID(), service, quantity: 1 }];
+      return [
+        ...current,
+        { key: uid(), service, quantity: 1, price: service.price },
+      ];
     });
+  };
+
+  const updatePrice = (key: string, value: string) => {
+    const num = Number(value);
+    setCart((current) =>
+      current.map((item) =>
+        item.key === key
+          ? { ...item, price: Number.isNaN(num) || num < 0 ? 0 : num }
+          : item,
+      ),
+    );
   };
 
   const changeQuantity = (key: string, delta: number) => {
@@ -146,6 +158,7 @@ export default function PosOrderPage() {
           service_type: item.service.name,
           product_type: item.service.productType,
           quantity: item.quantity,
+          unit_price: item.price,
         })),
         expected_delivery_date: deliveryDate,
         discount: discountNum,
@@ -421,8 +434,8 @@ export default function PosOrderPage() {
           <thead>
             <tr>
               <th>Service</th>
-              <th>Price</th>
               <th>Qty</th>
+              <th>Price</th>
               <th>Line Total</th>
               <th />
             </tr>
@@ -444,7 +457,6 @@ export default function PosOrderPage() {
                     {item.service.name}
                     <div className="muted">{item.service.productType}</div>
                   </td>
-                  <td>{formatMoney(item.service.price)}</td>
                   <td>
                     <div className="row-actions">
                       <button
@@ -466,8 +478,20 @@ export default function PosOrderPage() {
                       </button>
                     </div>
                   </td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="form-input"
+                      style={{ maxWidth: 110, textAlign: "right" }}
+                      value={item.price}
+                      onChange={(event) => updatePrice(item.key, event.target.value)}
+                      aria-label={`Price for ${item.service.name}`}
+                    />
+                  </td>
                   <td className="cell-total">
-                    {formatMoney(item.service.price * item.quantity)}
+                    {formatMoney(item.price * item.quantity)}
                   </td>
                   <td>
                     <button

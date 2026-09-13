@@ -7,7 +7,9 @@ const Register = lazy(() => import("./pages/Register"));
 const OrdersPage = lazy(() => import("./pages/Orders"));
 const CustomersPage = lazy(() => import("./pages/Customers"));
 const ServicesPage = lazy(() => import("./pages/Services"));
-const ReportsPage = lazy(() => import("./pages/Reports"));
+const ReportsPage = lazy(() => import("./pages/reports/ReportsPage"));
+const TodayDeliveryPage = lazy(() => import("./pages/TodayDelivery"));
+const DeleteRecordsPage = lazy(() => import("./pages/DeleteRecords"));
 const ExpensesPage = lazy(() => import("./pages/Expenses"));
 const SettingsPage = lazy(() => import("./pages/Settings"));
 const StaffPage = lazy(() => import("./pages/Staff"));
@@ -81,6 +83,30 @@ function App() {
             element={
               <ProtectedRoute>
                 <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports/:kind"
+            element={
+              <ProtectedRoute>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/today-delivery"
+            element={
+              <ProtectedRoute>
+                <TodayDeliveryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/delete-records"
+            element={
+              <ProtectedRoute>
+                <DeleteRecordsPage />
               </ProtectedRoute>
             }
           />

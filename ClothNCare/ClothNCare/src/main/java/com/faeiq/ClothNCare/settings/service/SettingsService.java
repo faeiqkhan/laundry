@@ -33,6 +33,21 @@ public class SettingsService {
         settings.setInvoiceFooter(dto.getInvoiceFooter() == null ? settings.getInvoiceFooter() : dto.getInvoiceFooter());
         settings.setTermsAndConditions(dto.getTermsAndConditions() == null
                 ? settings.getTermsAndConditions() : dto.getTermsAndConditions());
+        if (dto.getWhatsAppEnabled() != null) {
+            settings.setWhatsAppEnabled(dto.getWhatsAppEnabled());
+        }
+        settings.setWhatsAppPhoneNumberId(dto.getWhatsAppPhoneNumberId() == null
+                ? settings.getWhatsAppPhoneNumberId() : dto.getWhatsAppPhoneNumberId());
+        settings.setWhatsAppAccessToken(dto.getWhatsAppAccessToken() == null
+                ? settings.getWhatsAppAccessToken() : dto.getWhatsAppAccessToken());
+        settings.setWhatsAppMode(dto.getWhatsAppMode() == null
+                ? settings.getWhatsAppMode() : dto.getWhatsAppMode());
+        settings.setWhatsAppWelcomeTemplate(dto.getWhatsAppWelcomeTemplate() == null
+                ? settings.getWhatsAppWelcomeTemplate() : dto.getWhatsAppWelcomeTemplate());
+        settings.setWhatsAppInvoiceTemplate(dto.getWhatsAppInvoiceTemplate() == null
+                ? settings.getWhatsAppInvoiceTemplate() : dto.getWhatsAppInvoiceTemplate());
+        settings.setWhatsAppStatusTemplate(dto.getWhatsAppStatusTemplate() == null
+                ? settings.getWhatsAppStatusTemplate() : dto.getWhatsAppStatusTemplate());
         return settingsRepository.save(settings);
     }
 

@@ -77,48 +77,85 @@ export const ensureInvoice = async (orderId: string): Promise<string | null> => 
 
 export const printOrderTag = (order: {
   id: string;
+  invoiceNumber?: string;
   customerName?: string;
   customerPhone?: string;
   createdByName?: string;
   expectedDeliveryDate?: string;
-  totalPrice?: number;
-  status?: string;
+  items?: { id: string; serviceType: string; productType: string }[];
 }) => {
-  const printWindow = window.open("", "_blank", "width=420,height=640");
+  const printWindow = window.open("", "_blank", "width=460,height=680");
   if (!printWindow) {
     alert("Unable to open print window");
     return;
   }
 
-  const printDate = new Date().toLocaleString();
+  const invoiceNo = order.invoiceNumber || order.id.slice(0, 6);
+  const customer = order.customerName || order.customerPhone || "-";
+  const delivery = formatTagDate(order.expectedDeliveryDate);
+
+  const rows =
+    order.items && order.items.length > 0
+      ? order.items.map((item, index) => ({
+          service: item.serviceType,
+          garment: item.productType,
+          count: `${index + 1} / ${order.items!.length}`,
+        }))
+      : [{ service: "Dry Cleaning", garment: "Garment", count: "1 / 1" }];
+
+  const tagsHtml = rows
+    .map(
+      (row) => `
+        <div class="tag">
+          <div class="brand">Cloth &amp; Care</div>
+          <div class="service">${escapeHtml(row.service)}</div>
+          <div class="garment">${escapeHtml(row.garment)}</div>
+          <div class="invoice">${escapeHtml(invoiceNo)}</div>
+          <div class="customer">${escapeHtml(customer)}</div>
+          <div class="delivery">${escapeHtml(delivery || "Delivery date")}</div>
+          <div class="count">${escapeHtml(row.count)}</div>
+        </div>`,
+    )
+    .join("");
+
   const tagMarkup = `
     <!DOCTYPE html>
     <html>
       <head>
-        <title>Order Tag - ${order.id}</title>
+        <meta charset="utf-8">
+        <title>Garment Tags - ${order.id}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 0; padding: 16px; color: #111827; }
-          .tag { border: 2px dashed #111827; border-radius: 12px; padding: 16px; }
-          .brand { font-size: 18px; font-weight: 800; margin: 0 0 4px 0; letter-spacing: 0.4px; }
-          .muted { color: #4b5563; font-size: 12px; margin-bottom: 12px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
-          .label { color: #374151; }
-          .value { font-weight: 700; text-align: right; margin-left: 12px; }
-          .status { margin-top: 8px; display: inline-block; padding: 4px 10px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; font-weight: 700; font-size: 12px; }
+          * { box-sizing: border-box; }
+          html, body { margin: 0; padding: 0; background: #ffffff; }
+          body { font-family: Arial, Helvetica, sans-serif; color: #000000; }
+          .tags { display: flex; flex-direction: column; align-items: stretch; }
+          .tag {
+            width: 40mm;
+            height: 70mm;
+            padding: 2mm 2mm;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-evenly;
+            text-align: center;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            page-break-after: always;
+            break-after: page;
+          }
+          .tag:last-child { page-break-after: auto; break-after: auto; }
+          .brand { font-size: 15px; font-weight: 800; letter-spacing: 0.4px; white-space: nowrap; }
+          .service { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; }
+          .garment { font-size: 13px; font-weight: 700; }
+          .invoice { font-size: 26px; font-weight: 800; letter-spacing: 0.6px; line-height: 1.05; }
+          .customer { font-size: 11px; font-weight: 700; }
+          .delivery { font-size: 10px; font-weight: 700; }
+          .count { font-size: 12px; font-weight: 800; }
+          @page { size: 40mm 70mm; margin: 0; }
         </style>
       </head>
       <body>
-        <div class="tag">
-          <p class="brand">ClothNCare</p>
-          <p class="muted">Laundry Tag • ${printDate}</p>
-          <div class="row"><span class="label">Order ID</span><span class="value">${order.id}</span></div>
-          <div class="row"><span class="label">Customer</span><span class="value">${order.customerName ?? "-"}</span></div>
-          <div class="row"><span class="label">Customer Phone</span><span class="value">${order.customerPhone ?? "-"}</span></div>
-          <div class="row"><span class="label">Created By</span><span class="value">${order.createdByName ?? "-"}</span></div>
-          <div class="row"><span class="label">Delivery Date</span><span class="value">${order.expectedDeliveryDate ?? "-"}</span></div>
-          <div class="row"><span class="label">Total</span><span class="value">₹${order.totalPrice ?? 0}</span></div>
-          <span class="status">${order.status}</span>
-        </div>
+        <div class="tags">${tagsHtml}</div>
         <script>
           window.onload = function() {
             window.print();
@@ -133,3 +170,20 @@ export const printOrderTag = (order: {
   printWindow.document.write(tagMarkup);
   printWindow.document.close();
 };
+
+const formatTagDate = (value?: string): string => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");

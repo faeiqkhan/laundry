@@ -56,6 +56,13 @@ export default function SettingsPage() {
         taxRate: settings.taxRate,
         invoiceFooter: settings.invoiceFooter,
         termsAndConditions: settings.termsAndConditions,
+        whatsAppEnabled: settings.whatsAppEnabled,
+        whatsAppPhoneNumberId: settings.whatsAppPhoneNumberId,
+        whatsAppAccessToken: settings.whatsAppAccessToken,
+        whatsAppMode: settings.whatsAppMode,
+        whatsAppWelcomeTemplate: settings.whatsAppWelcomeTemplate,
+        whatsAppInvoiceTemplate: settings.whatsAppInvoiceTemplate,
+        whatsAppStatusTemplate: settings.whatsAppStatusTemplate,
       });
 
       setSettings(updated);
@@ -237,6 +244,106 @@ export default function SettingsPage() {
             />
             <p className="form-hint">Printed on invoices, one line per condition.</p>
           </div>
+
+          <div className="section-title">
+            <h3>WhatsApp Notifications</h3>
+          </div>
+
+          <div className="form-field form-check">
+            <label>
+              <input
+                type="checkbox"
+                checked={settings.whatsAppEnabled}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppEnabled: event.target.checked })
+                }
+              />
+              Enable WhatsApp messages
+            </label>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-field">
+              <label>Phone Number ID</label>
+              <input
+                className="form-input"
+                value={settings.whatsAppPhoneNumberId ?? ""}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppPhoneNumberId: event.target.value })
+                }
+              />
+            </div>
+
+            <div className="form-field">
+              <label>Access Token</label>
+              <input
+                type="password"
+                className="form-input"
+                value={settings.whatsAppAccessToken ?? ""}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppAccessToken: event.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="form-field">
+            <label>Message Mode</label>
+            <select
+              className="form-input"
+              value={settings.whatsAppMode ?? "FREE_FORM"}
+              onChange={(event) =>
+                setSettings({ ...settings, whatsAppMode: event.target.value })
+              }
+            >
+              <option value="FREE_FORM">Free-form text</option>
+              <option value="TEMPLATE">Approved templates</option>
+            </select>
+            <p className="form-hint">
+              Free-form works inside WhatsApp&apos;s 24-hour customer window. Use
+              approved templates for messages outside it.
+            </p>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-field">
+              <label>Welcome Template Name</label>
+              <input
+                className="form-input"
+                value={settings.whatsAppWelcomeTemplate ?? ""}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppWelcomeTemplate: event.target.value })
+                }
+              />
+            </div>
+
+            <div className="form-field">
+              <label>Invoice Template Name</label>
+              <input
+                className="form-input"
+                value={settings.whatsAppInvoiceTemplate ?? ""}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppInvoiceTemplate: event.target.value })
+                }
+              />
+            </div>
+
+            <div className="form-field">
+              <label>Status Template Name</label>
+              <input
+                className="form-input"
+                value={settings.whatsAppStatusTemplate ?? ""}
+                onChange={(event) =>
+                  setSettings({ ...settings, whatsAppStatusTemplate: event.target.value })
+                }
+              />
+            </div>
+          </div>
+          <p className="form-hint">
+            Customers get a welcome message on signup, a text invoice on every
+            order, and automatic status updates on the wash schedule (Day 1
+            wash, Day 2 dry, Day 3 iron, Day 4 ready).
+          </p>
 
           <div className="settings-actions">
             <button

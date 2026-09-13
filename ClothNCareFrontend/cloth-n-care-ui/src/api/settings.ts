@@ -11,6 +11,13 @@ export interface Settings {
   taxRate: number;
   invoiceFooter: string;
   termsAndConditions: string;
+  whatsAppEnabled: boolean;
+  whatsAppPhoneNumberId: string;
+  whatsAppAccessToken: string;
+  whatsAppMode: string;
+  whatsAppWelcomeTemplate: string;
+  whatsAppInvoiceTemplate: string;
+  whatsAppStatusTemplate: string;
 }
 
 export interface SettingsPayload {
@@ -24,6 +31,13 @@ export interface SettingsPayload {
   taxRate?: number;
   invoiceFooter?: string;
   termsAndConditions?: string;
+  whatsAppEnabled?: boolean;
+  whatsAppPhoneNumberId?: string;
+  whatsAppAccessToken?: string;
+  whatsAppMode?: string;
+  whatsAppWelcomeTemplate?: string;
+  whatsAppInvoiceTemplate?: string;
+  whatsAppStatusTemplate?: string;
 }
 
 export const getSettings = async () => {

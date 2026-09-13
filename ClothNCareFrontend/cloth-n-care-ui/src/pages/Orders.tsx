@@ -6,6 +6,7 @@ import Icon from "../components/Icons";
 import { getOrders, deleteOrder } from "../api/orders";
 import { printOrderTag, downloadInvoice } from "../utils/invoice";
 import DashboardLayout from "../layout/DashboardLayout";
+import ImportExportButtons from "../components/ImportExportButtons";
 import type { Order } from "../types/order";
 import { ORDER_STATUSES } from "../types/order";
 import { formatMoney, formatDate } from "../utils/format";
@@ -114,6 +115,10 @@ export default function OrdersPage() {
         </div>
 
         <div className="page-header-actions">
+          <ImportExportButtons
+            resource="orders"
+            onImported={fetchOrders}
+          />
           <button
             type="button"
             className="btn btn-primary"

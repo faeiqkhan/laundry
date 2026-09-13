@@ -26,6 +26,7 @@ export default function ExpenseHeadsPage() {
       title="Expense Heads"
       subtitle={(count) => `${count} expense heads configured`}
       icon="folder"
+      resource="expense-heads"
       emptyMessage="No expense heads found"
       searchKeys={["name", "description"]}
       fetchAll={getExpenseHeads}

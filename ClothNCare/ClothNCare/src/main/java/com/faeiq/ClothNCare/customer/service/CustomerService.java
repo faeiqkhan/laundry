@@ -8,6 +8,7 @@ import com.faeiq.ClothNCare.customer.dto.CustomerResponseDTO;
 import com.faeiq.ClothNCare.customer.dto.CustomerSummaryDTO;
 import com.faeiq.ClothNCare.customer.entity.Customer;
 import com.faeiq.ClothNCare.customer.repository.CustomerRepository;
+import com.faeiq.ClothNCare.messaging.whatsapp.WhatsAppNotifier;
 import com.faeiq.ClothNCare.orders.entity.Orders;
 import com.faeiq.ClothNCare.orders.repository.OrdersRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final OrdersRepository ordersRepository;
+    private final WhatsAppNotifier whatsAppNotifier;
 
     @Transactional
     public CustomerResponseDTO createCustomer(CustomerDTO customerDTO) {
@@ -35,7 +37,9 @@ public class CustomerService {
         apply(newCustomer, customerDTO);
         newCustomer.setCreated_at(LocalDateTime.now());
 
-        return toResponse(customerRepository.save(newCustomer));
+        CustomerResponseDTO response = toResponse(customerRepository.save(newCustomer));
+        whatsAppNotifier.notifyCustomerCreated(newCustomer);
+        return response;
     }
 
     @Transactional

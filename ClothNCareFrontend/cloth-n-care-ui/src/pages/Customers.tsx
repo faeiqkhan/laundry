@@ -9,6 +9,7 @@ import {
 } from "../api/customers";
 import CreateCustomerModal from "../components/CreateCustomerModal";
 import CustomerDetailDrawer from "../components/CustomerDetailDrawer";
+import ImportExportButtons from "../components/ImportExportButtons";
 import Icon from "../components/Icons";
 import DashboardLayout from "../layout/DashboardLayout";
 import { formatDate } from "../utils/format";
@@ -237,6 +238,10 @@ export default function CustomersPage() {
         </div>
 
         <div className="page-header-actions">
+          <ImportExportButtons
+            resource="customers"
+            onImported={fetchCustomers}
+          />
           <button
             type="button"
             className="btn btn-primary"

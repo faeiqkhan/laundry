@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getOrders } from "../api/orders";
 import { deleteInvoice } from "../api/invoices";
 import DashboardLayout from "../layout/DashboardLayout";
+import ImportExportButtons from "../components/ImportExportButtons";
 import Icon from "../components/Icons";
 import StatusBadge from "../components/StatusBadge";
 import type { Order } from "../types/order";
@@ -81,6 +82,9 @@ export default function InvoicesPage() {
           <p>
             {orders.length} orders · {issued} with invoices
           </p>
+        </div>
+        <div className="page-header-actions">
+          <ImportExportButtons resource="invoices" importable={false} />
         </div>
       </div>
 

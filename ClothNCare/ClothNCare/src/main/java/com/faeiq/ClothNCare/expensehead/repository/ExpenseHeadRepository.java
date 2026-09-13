@@ -4,8 +4,11 @@ import com.faeiq.ClothNCare.expensehead.entity.ExpenseHead;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ExpenseHeadRepository extends JpaRepository<ExpenseHead, String> {
 
     List<ExpenseHead> findAllByOrderByNameAsc();
+
+    Optional<ExpenseHead> findByNameIgnoreCase(String name);
 }

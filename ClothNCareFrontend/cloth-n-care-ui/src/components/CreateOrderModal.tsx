@@ -18,12 +18,14 @@ interface OrderItemDraft {
   service_type: string;
   product_type: string;
   quantity: number;
+  unit_price: string;
 }
 
 const createEmptyItem = (): OrderItemDraft => ({
   service_type: "",
   product_type: "",
   quantity: 1,
+  unit_price: "",
 });
 
 const uniqueValues = (values: string[]) => Array.from(new Set(values));
@@ -158,6 +160,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
         !item.service_type ||
         !item.product_type ||
         item.quantity <= 0 ||
+        (item.unit_price !== "" && Number(item.unit_price) < 0) ||
         !activeServices.some(
           (service) =>
             service.name === item.service_type &&
@@ -182,7 +185,12 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
       await createOrder({
         customerId: selectedCustomer.id,
         phone: selectedCustomer.phone,
-        items,
+        items: items.map((item) => ({
+          service_type: item.service_type,
+          product_type: item.product_type,
+          quantity: item.quantity,
+          unit_price: item.unit_price !== "" ? Number(item.unit_price) : undefined,
+        })),
         expected_delivery_date: deliveryDate,
         discount: discountNum,
       });
@@ -360,9 +368,20 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                   <select
                     className="form-input"
                     value={item.product_type}
-                    onChange={(event) =>
-                      updateItem(index, "product_type", event.target.value)
-                    }
+                    onChange={(event) => {
+                      const productType = event.target.value;
+                      updateItem(index, "product_type", productType);
+                      const matched = activeServices.find(
+                        (service) =>
+                          service.name === item.service_type &&
+                          service.productType === productType,
+                      );
+                      updateItem(
+                        index,
+                        "unit_price",
+                        matched ? String(matched.price) : "",
+                      );
+                    }}
                     disabled={!item.service_type}
                   >
                     <option value="">Select Product</option>
@@ -383,6 +402,21 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                     onChange={(event) =>
                       updateItem(index, "quantity", Number(event.target.value))
                     }
+                  />
+
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-input quantity-input"
+                    placeholder="Price"
+                    style={{ maxWidth: 110 }}
+                    value={item.unit_price}
+                    onChange={(event) =>
+                      updateItem(index, "unit_price", event.target.value)
+                    }
+                    disabled={!item.product_type}
+                    aria-label="Unit price"
                   />
 
                   <button
