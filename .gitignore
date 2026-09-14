@@ -4,5 +4,17 @@ release/
 # Bundled portable Java runtime (downloaded once, not committed)
 jre-staging/
 
+# Bundled portable Node.js runtime (downloaded once, not committed)
+node-staging/
+
 # JWT secret generated on first run (client machine)
 jwt-secret.txt
+
+# Swash source exports (client business data, never committed)
+swash-data/
+
+# Shop pricing catalogs (business pricing data)
+price-matrix.csv
+pricelist-catalog-import.csv
+products-import.csv
+services-import.csv

@@ -29,16 +29,21 @@ if not exist invoices mkdir invoices
 rem ------------------------------------------------------------------
 rem Start the WhatsApp service (Node.js / whatsapp-web.js) so that
 rem WhatsApp notifications and invoice messages work.
+rem Node.js is bundled in the "node" folder (like the "jre" folder);
+rem if that is missing, the system Node is used as a fallback.
 rem It is a no-op if Node is missing, the service folder is absent, or
 rem something is already listening on port 3001.
 rem ------------------------------------------------------------------
 echo.
 echo Starting WhatsApp service...
+set "NODE_EXE=%~dp0node\node.exe"
+if exist "%NODE_EXE%" goto :havenode
+set "NODE_EXE=node"
 where node >nul 2>nul
-if errorlevel 1 (
-  echo   [SKIP] Node.js not found - WhatsApp notifications disabled.
-  goto :secret
-)
+if not errorlevel 1 goto :havenode
+echo   [SKIP] Node.js not found - WhatsApp notifications disabled.
+goto :secret
+:havenode
 set "WA_DIR=whatsapp-service"
 if not exist "%WA_DIR%\src\server.js" (
   if exist "..\whatsapp-service\src\server.js" set "WA_DIR=..\whatsapp-service"
@@ -54,7 +59,7 @@ if not errorlevel 1 (
 )
 rem Hide the service - no extra cmd window. Output goes to whatsapp-service.log
 rem next to start.bat so it can be checked if something goes wrong.
-start "" /b /d "%~dp0%WA_DIR%" node src\server.js >> "%~dp0whatsapp-service.log" 2>&1
+start "" /b /d "%~dp0%WA_DIR%" "%NODE_EXE%" src\server.js >> "%~dp0whatsapp-service.log" 2>&1
 echo   [OK] WhatsApp service starting in the background on 127.0.0.1:3001.
 echo        If a QR code is required, open Settings -> WhatsApp Connection
 echo        in the app to scan it.

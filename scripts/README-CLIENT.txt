@@ -6,7 +6,9 @@ the app on one computer and use it from any device on the same network.
 ## Requirements
 
 - A Windows 10/11 computer that stays switched on while you work
-- Nothing to install! Java is bundled inside the `jre` folder in this package.
+- Nothing to install! Java is bundled inside the `jre` folder in this package,
+  and Node.js is bundled inside the `node` folder (used by the WhatsApp
+  notifications feature).
 
 ## First-time setup (do once)
 

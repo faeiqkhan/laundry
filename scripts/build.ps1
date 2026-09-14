@@ -136,6 +136,27 @@ if (Test-Path $jreStaging) {
     Write-Host "WARNING: jre-staging\jre not found - release will require Java to be installed." -ForegroundColor Yellow
 }
 
+# Bundle a portable Node.js runtime so the WhatsApp service does not need Node
+# installed on the client PC. Extract the official Windows x64 zip once into
+# node-staging\node - it is copied into the release the same way as the JRE.
+# The copy is done only when release\node is missing, since a running service
+# may hold node.exe open and overwriting a bundled runtime between builds is
+# pointless. Falls back to system Node at runtime if missing.
+$nodeStaging = Join-Path $repoRoot "node-staging\node"
+if (Test-Path (Join-Path $nodeStaging "node.exe")) {
+    $nodeInRelease = Join-Path $release "node"
+    if (Test-Path (Join-Path $nodeInRelease "node.exe")) {
+        Write-Host "Reusing existing release\node (bundled Node already present)..." -ForegroundColor Cyan
+    } else {
+        Write-Host "Copying bundled Node.js runtime (node-staging\node -> release\node)..." -ForegroundColor Cyan
+        Remove-Item $nodeInRelease -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $nodeInRelease -Force | Out-Null
+        Copy-Item "$nodeStaging\*" $nodeInRelease -Recurse -Force
+    }
+} else {
+    Write-Host "WARNING: node-staging\node not found - WhatsApp service will require Node.js to be installed." -ForegroundColor Yellow
+}
+
 # Seed the release with a database only when the release has none yet, so a
 # running/deployed app keeps its own data (and no file-lock errors occur).
 if (Test-Path "$backend\data\clothncare.db") {

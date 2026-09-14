@@ -64,6 +64,15 @@ jobs:
           mv jre-staging/jdk-*/jre/* jre/ 2>/dev/null || mv jre-staging/jdk-*/* jre/
           rm -rf jre-staging jre.zip
 
+      - name: Download Windows x64 Node.js LTS runtime
+        run: |
+          curl -fL -o node.zip "https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip"
+          mkdir -p node
+          unzip -q node.zip -d node-staging
+          mv node-staging/*/* node/
+          rm -rf node-staging node.zip
+          test -f node/node.exe
+
       - name: Resolve version
         id: version
         run: |
@@ -78,6 +87,8 @@ jobs:
           cp scripts/start.bat release/start.bat
           cp scripts/README-CLIENT.txt release/README-CLIENT.txt
           cp -r jre release/jre
+          # Portable Node.js runtime (WhatsApp service does not need Node installed)
+          cp -r node release/node
           # WhatsApp notification service (node_modules built above via npm ci;
           # per-machine session/cache data is excluded, same as the local build)
           cp -r whatsapp-service release/whatsapp-service
@@ -109,6 +120,7 @@ jobs:
             Release built from `${{ github.sha }}`.
 
             Download `ClothNCare-${{ steps.version.outputs.version }}.zip`, unzip it
-            on the client PC, and double-click `start.bat`. Java is bundled.
+            on the client PC, and double-click `start.bat`. Java and Node.js are
+            bundled.
           files: ClothNCare-${{ steps.version.outputs.version }}.zip
           fail_on_unmatched_files: true
