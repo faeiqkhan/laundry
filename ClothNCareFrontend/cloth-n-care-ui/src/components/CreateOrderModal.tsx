@@ -20,6 +20,7 @@ interface OrderItemDraft {
   category: string;
   productId: string;
   quantity: string;
+  price: string;
 }
 
 const createEmptyItem = (): OrderItemDraft => ({
@@ -27,6 +28,7 @@ const createEmptyItem = (): OrderItemDraft => ({
   category: "",
   productId: "",
   quantity: "",
+  price: "",
 });
 
 const groupCatalog = (products: Product[]) => {
@@ -204,7 +206,10 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
             product_type: product.category,
             uom: product.unit,
             quantity: qty,
-            unit_price: product.price,
+            unit_price:
+                        item.price && Number(item.price) > 0
+                          ? Number(item.price)
+                          : product.price,
           };
         }),
         expected_delivery_date: deliveryDate,
@@ -232,7 +237,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
         <div className="modal-header">
           <div>
             <h2 id="create-order-title">Create Order</h2>
-            <p>Service → Category → Product (pricing is automatic)</p>
+            <p>Service → Category → Product (rates are editable)</p>
           </div>
           <button type="button" className="icon-button icon-only" onClick={onClose}>
             <Icon name="close" size={18} />
@@ -360,12 +365,17 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                     : [];
                 const product = productList.find((p) => p.id === item.productId);
                 const weightUom = product ? isWeightUom(product) : false;
+                const effectivePrice =
+                  item.price && Number(item.price) > 0
+                    ? Number(item.price)
+                    : product?.price ?? 0;
                 const lineTotal =
                   product && item.quantity
-                    ? product.price * Number(item.quantity)
+                    ? effectivePrice * Number(item.quantity)
                     : 0;
                 return (
                   <div key={index} className="modal-item-row">
+                    <div className="modal-item-row-top">
                     <select
                       className="form-input"
                       value={item.service}
@@ -379,6 +389,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                         updateItem(index, "category", firstCategory || "");
                         updateItem(index, "productId", "");
                         updateItem(index, "quantity", "");
+                        updateItem(index, "price", "");
                       }}
                     >
                       <option value="">Service</option>
@@ -396,6 +407,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                         updateItem(index, "category", event.target.value);
                         updateItem(index, "productId", "");
                         updateItem(index, "quantity", "");
+                        updateItem(index, "price", "");
                       }}
                       disabled={!item.service}
                     >
@@ -415,6 +427,14 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                         if (!item.quantity) {
                           updateItem(index, "quantity", "1");
                         }
+                        const chosen = productList.find(
+                          (p) => p.id === event.target.value,
+                        );
+                        updateItem(
+                          index,
+                          "price",
+                          chosen ? String(chosen.price) : "",
+                        );
                       }}
                       disabled={!item.category}
                     >
@@ -425,36 +445,64 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                         </option>
                       ))}
                     </select>
+                    </div>
 
-                    <input
-                      type="number"
-                      min={weightUom ? 0 : 1}
-                      step={weightUom ? 0.1 : 1}
-                      className="form-input quantity-input"
-                      value={item.quantity}
-                      onChange={(event) =>
-                        updateItem(index, "quantity", event.target.value)
-                      }
-                      placeholder={weightUom ? "Weight (Kg)" : "Qty"}
-                      aria-label="Quantity"
-                    />
+                    <div className="modal-item-row-bottom">
+                      <div className="modal-item-field">
+                        <label>{weightUom ? "Rate/Kg" : "Rate"}</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="form-input rate-input"
+                          value={item.price}
+                          onChange={(event) =>
+                            updateItem(index, "price", event.target.value)
+                          }
+                          placeholder={product ? formatMoney(product.price) : "0.00"}
+                          aria-label="Unit price"
+                        />
+                      </div>
 
-                    <span
-                      style={{ minWidth: 70, textAlign: "right", fontWeight: 700 }}
-                    >
-                      {product && item.quantity
-                        ? formatMoney(lineTotal)
-                        : "—"}
-                    </span>
+                      <div className="modal-item-field">
+                        <label>{weightUom ? "Weight (Kg)" : "Qty"}</label>
+                        <input
+                          type="number"
+                          min={weightUom ? 0 : 1}
+                          step={weightUom ? 0.1 : 1}
+                          className="form-input quantity-input"
+                          value={item.quantity}
+                          onChange={(event) =>
+                            updateItem(index, "quantity", event.target.value)
+                          }
+                          placeholder={weightUom ? "0.0" : "1"}
+                          aria-label="Quantity"
+                        />
+                      </div>
 
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={() => removeItem(index)}
-                      disabled={items.length === 1}
-                    >
-                      <Icon name="trash" size={15} />
-                    </button>
+                      <div className="modal-item-field">
+                        <label>Total</label>
+                        <span
+                          className={`modal-item-line ${
+                            product && item.quantity ? "" : "modal-item-line-empty"
+                          }`}
+                        >
+                          {product && item.quantity
+                            ? formatMoney(lineTotal)
+                            : "—"}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => removeItem(index)}
+                        disabled={items.length === 1}
+                        title="Remove item"
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

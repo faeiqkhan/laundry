@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getCustomers, createCustomer, type Customer } from "../api/customers";
 import { getActiveCatalog, type Product } from "../api/products";
 import { createOrder, recordPayment } from "../api/orders";
+import { getSettings, type Settings } from "../api/settings";
 import DashboardLayout from "../layout/DashboardLayout";
 import Icon from "../components/Icons";
 import type { Order, PaymentMethod } from "../types/order";
@@ -14,6 +15,7 @@ interface CartItem {
   key: string;
   product: Product;
   quantity: number;
+  unitPrice: string;
 }
 
 const tomorrowISO = (): string => {
@@ -45,9 +47,12 @@ const groupCatalog = (products: Product[]) => {
 const isWeightUom = (product: Product): boolean =>
   (product.unit || "").toLowerCase() === "kg";
 
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+
 export default function PosOrderPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [catalog, setCatalog] = useState<Map<string, Map<string, Product[]>>>(new Map());
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [customerId, setCustomerId] = useState("");
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
@@ -67,10 +72,11 @@ export default function PosOrderPage() {
   useEffect(() => {
     let ignore = false;
 
-    Promise.all([getCustomers(), getActiveCatalog()])
-      .then(([customerList, productList]) => {
+    Promise.all([getCustomers(), getActiveCatalog(), getSettings()])
+      .then(([customerList, productList, appSettings]) => {
         if (!ignore) {
           setCustomers(customerList);
+          setSettings(appSettings);
           const grouped = groupCatalog(productList);
           setCatalog(grouped);
           const firstService = grouped.keys().next().value as string | undefined;
@@ -95,6 +101,10 @@ export default function PosOrderPage() {
     };
   }, []);
 
+  const currencySymbol = settings?.currencySymbol || "\u20b9";
+  const money = (value: number | null | undefined): string =>
+    formatMoney(value, currencySymbol);
+
   const serviceNames = useMemo(() => Array.from(catalog.keys()), [catalog]);
 
   const categoryNames = useMemo(() => {
@@ -113,17 +123,28 @@ export default function PosOrderPage() {
     return list;
   }, [catalog, service, category, productSearch]);
 
+  const resolvedPrice = (item: CartItem): number => {
+    const num = Number(item.unitPrice);
+    return Number.isFinite(num) && num >= 0 ? num : item.product.price;
+  };
+
   const subtotal = useMemo(
-    () => cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    () => cart.reduce((sum, item) => sum + resolvedPrice(item) * item.quantity, 0),
     [cart],
   );
+
+  const taxRate = settings?.taxRate ?? 0;
 
   const discountNum = useMemo(() => {
     const num = Number(discount);
     return Number.isNaN(num) || num < 0 ? 0 : num;
   }, [discount]);
 
-  const estimatedTotal = Math.max(0, subtotal - discountNum);
+  const appliedDiscount = Math.min(discountNum, subtotal);
+  const taxable = Math.max(0, subtotal - appliedDiscount);
+  const taxAmount = round2((taxable * taxRate) / 100);
+  const grandTotal = round2(taxable + taxAmount);
+  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const addToCart = (product: Product) => {
     setCart((current) => {
@@ -137,7 +158,12 @@ export default function PosOrderPage() {
       }
       return [
         ...current,
-        { key: uid(), product, quantity: isWeightUom(product) ? 0.5 : 1 },
+        {
+          key: uid(),
+          product,
+          quantity: isWeightUom(product) ? 0.5 : 1,
+          unitPrice: String(product.price),
+        },
       ];
     });
   };
@@ -167,6 +193,14 @@ export default function PosOrderPage() {
         item.key === key
           ? { ...item, quantity: Number.isNaN(num) ? 0 : num }
           : item,
+      ),
+    );
+  };
+
+  const setUnitPriceValue = (key: string, value: string) => {
+    setCart((current) =>
+      current.map((item) =>
+        item.key === key ? { ...item, unitPrice: value } : item,
       ),
     );
   };
@@ -221,10 +255,10 @@ export default function PosOrderPage() {
           product_type: item.product.category,
           uom: item.product.unit,
           quantity: item.quantity,
-          unit_price: item.product.price,
+          unit_price: resolvedPrice(item),
         })),
         expected_delivery_date: deliveryDate,
-        discount: discountNum,
+        discount: appliedDiscount,
       });
       setPlacedOrder(order);
       setPayAmount(order.balanceDue.toString());
@@ -302,17 +336,17 @@ export default function PosOrderPage() {
   if (placedOrder) {
     return (
       <DashboardLayout>
-        <div className="table-card">
-          <div style={{ textAlign: "center", padding: "32px 16px" }}>
-            <Icon name="check" size={40} className="stat-card-icon success" />
-            <h2 style={{ margin: "12px 0 4px" }}>Order placed</h2>
-            <p className="cell-muted">
-              {placedOrder.invoiceNumber ?? placedOrder.id.slice(0, 8)} ·{" "}
-              {formatMoney(placedOrder.totalPrice)}
-            </p>
+        <div className="pos-success">
+          <div className="pos-success-icon">
+            <Icon name="check" size={40} />
           </div>
+          <h2>Order placed</h2>
+          <p className="cell-muted">
+            {placedOrder.invoiceNumber ?? placedOrder.id.slice(0, 8)} ·{" "}
+            {money(placedOrder.totalPrice)}
+          </p>
 
-          <div className="form-grid" style={{ padding: "0 16px 16px" }}>
+          <div className="form-grid" style={{ padding: "0 16px 16px", maxWidth: 520, margin: "0 auto" }}>
             <div className="form-field">
               <label htmlFor="pos-pay-amount">Payment Amount</label>
               <input
@@ -345,17 +379,13 @@ export default function PosOrderPage() {
           </div>
 
           {placedOrder.balanceDue > 0 && (
-            <div className="detail-grid" style={{ padding: "0 16px" }}>
-              <div>
-                <span className="detail-label">Balance Due</span>
-                <span className="detail-value amount-due">
-                  {formatMoney(placedOrder.balanceDue)}
-                </span>
-              </div>
+            <div className="pos-balance">
+              <span className="detail-label">Balance Due</span>
+              <span className="amount-due">{money(placedOrder.balanceDue)}</span>
             </div>
           )}
 
-          <div className="modal-actions">
+          <div className="modal-actions" style={{ justifyContent: "center" }}>
             <button
               type="button"
               className="btn btn-secondary"
@@ -393,19 +423,25 @@ export default function PosOrderPage() {
     <DashboardLayout>
       <div className="page-header">
         <div className="page-header-text">
-          <h1>POS Order</h1>
-          <p>Select service, category, and product — pricing is automatic</p>
+          <h1>New Order</h1>
+          <p>Quick full-service billing — pick products, adjust rates if needed</p>
         </div>
+        {cart.length > 0 && (
+          <button type="button" className="btn btn-ghost" onClick={resetCart}>
+            <Icon name="close" size={16} />
+            Clear all
+          </button>
+        )}
       </div>
 
       {error && <div className="form-error">{error}</div>}
 
-      <div className="form-grid" style={{ marginBottom: 16 }}>
-        <div className="form-field">
+      <div className="pos-order-bar">
+        <div className="form-field pos-order-field pos-order-customer">
           <label htmlFor="pos-customer">Customer</label>
           <select
             id="pos-customer"
-            className="form-input"
+            className="select-slim"
             value={customerId}
             onChange={(event) => {
               setCustomerId(event.target.value);
@@ -424,22 +460,22 @@ export default function PosOrderPage() {
 
         {!customerId && (
           <>
-            <div className="form-field">
-              <label htmlFor="pos-new-name">New Customer Name</label>
+            <div className="form-field pos-order-field">
+              <label htmlFor="pos-new-name">Name</label>
               <input
                 id="pos-new-name"
                 type="text"
-                className="form-input"
+                className="select-slim"
                 value={newCustomerName}
                 onChange={(event) => setNewCustomerName(event.target.value)}
               />
             </div>
-            <div className="form-field">
-              <label htmlFor="pos-new-phone">New Customer Phone</label>
+            <div className="form-field pos-order-field">
+              <label htmlFor="pos-new-phone">Phone</label>
               <input
                 id="pos-new-phone"
                 type="text"
-                className="form-input"
+                className="select-slim"
                 value={newCustomerPhone}
                 onChange={(event) => setNewCustomerPhone(event.target.value)}
               />
@@ -447,39 +483,29 @@ export default function PosOrderPage() {
           </>
         )}
 
-        <div className="form-field">
+        <div className="form-field pos-order-field">
           <label htmlFor="pos-delivery">Expected Delivery</label>
           <input
             id="pos-delivery"
             type="date"
-            className="form-input"
+            className="select-slim"
             value={deliveryDate}
             onChange={(event) => setDeliveryDate(event.target.value)}
           />
         </div>
       </div>
 
-      <div className="stats-grid" style={{ marginBottom: 16 }}>
-        <div className="table-card" style={{ padding: 16 }}>
-          <h2 style={{ margin: "0 0 12px", fontSize: 16 }}>
-            {service ? `Service: ${service}` : "Services"}
-          </h2>
-
-          <div className="kpi-grid">
-            {serviceNames.length === 0 ? (
-              <p className="cell-muted">No active products configured</p>
-            ) : (
-              serviceNames.map((serviceName) => (
+      <div className="pos-layout">
+        <div className="pos-catalog">
+          <div className="pos-catalog-toolbar">
+            <div className="flex gap-8" style={{ flexWrap: "wrap" }}>
+              {serviceNames.map((serviceName) => (
                 <button
                   key={serviceName}
                   type="button"
-                  className="stat-card"
-                  style={{
-                    cursor: "pointer",
-                    textAlign: "left",
-                    width: "100%",
-                    outline: service === serviceName ? "2px solid var(--primary, #2563eb)" : undefined,
-                  }}
+                  className={`service-chip ${
+                    service === serviceName ? "service-chip-active" : ""
+                  }`}
                   onClick={() => {
                     setService(serviceName);
                     setCategory(
@@ -488,204 +514,240 @@ export default function PosOrderPage() {
                     setProductSearch("");
                   }}
                 >
-                  <div className="stat-card-top">
-                    <span className="stat-card-label">{serviceName}</span>
+                  <Icon name="tag" size={15} />
+                  {serviceName}
+                  <span className="service-chip-count">
+                    {catalog.get(serviceName)?.size ?? 0}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pos-catalog-filters">
+            <div className="category-pills">
+              {categoryNames.map((categoryName) => (
+                <button
+                  key={categoryName}
+                  type="button"
+                  className={`category-pill ${
+                    category === categoryName ? "category-pill-active" : ""
+                  }`}
+                  onClick={() => {
+                    setCategory(categoryName);
+                    setProductSearch("");
+                  }}
+                >
+                  {categoryName}
+                </button>
+              ))}
+            </div>
+
+            <div className="search-box" style={{ maxWidth: 260 }}>
+              <Icon name="search" size={16} className="search-icon" />
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={productSearch}
+                onChange={(event) => setProductSearch(event.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="pos-product-grid">
+            {visibleProducts.length === 0 ? (
+              <div className="table-empty">
+                <Icon name="shirt" size={32} className="table-empty-icon" />
+                <div>No products in this category</div>
+              </div>
+            ) : (
+              visibleProducts.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  className="pos-product"
+                  onClick={() => addToCart(product)}
+                >
+                  <div className="pos-product-name">{product.name}</div>
+                  <div className="pos-product-meta">
+                    {product.unit || "Nos"} · {product.category}
                   </div>
-                  <div className="stat-card-sub">
-                    {catalog.get(serviceName)?.size ?? 0} categories
+                  <div className="pos-product-foot">
+                    <span className="pos-product-price">
+                      {money(product.price)}
+                    </span>
+                    <span className="pos-product-add">
+                      <Icon name="plus" size={14} />
+                    </span>
                   </div>
                 </button>
               ))
             )}
           </div>
-
-          {service && (
-            <>
-              <div className="flex gap-8" style={{ margin: "12px 0", flexWrap: "wrap" }}>
-                {categoryNames.map((categoryName) => (
-                  <button
-                    key={categoryName}
-                    type="button"
-                    className={`btn btn-sm ${
-                      category === categoryName ? "btn-primary" : "btn-secondary"
-                    }`}
-                    onClick={() => {
-                      setCategory(categoryName);
-                      setProductSearch("");
-                    }}
-                  >
-                    {categoryName}
-                  </button>
-                ))}
-              </div>
-
-              <div className="form-field" style={{ marginBottom: 12 }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="Search products..."
-                  value={productSearch}
-                  onChange={(event) => setProductSearch(event.target.value)}
-                />
-              </div>
-
-              <div className="kpi-grid">
-                {visibleProducts.length === 0 ? (
-                  <p className="cell-muted">No products in this category</p>
-                ) : (
-                  visibleProducts.map((product) => (
-                    <button
-                      key={product.id}
-                      type="button"
-                      className="stat-card"
-                      style={{ cursor: "pointer", textAlign: "left", width: "100%" }}
-                      onClick={() => addToCart(product)}
-                    >
-                      <div className="stat-card-top">
-                        <span className="stat-card-label">{product.name}</span>
-                        <span className="stat-card-icon">
-                          <Icon name="plus" size={16} />
-                        </span>
-                      </div>
-                      <div className="stat-card-value">
-                        {formatMoney(product.price)}
-                      </div>
-                      <div className="stat-card-sub">
-                        {product.unit || "Nos"} · {product.category}
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </>
-          )}
         </div>
-      </div>
 
-      <div className="table-card">
-        <h2 style={{ margin: "0 0 12px", fontSize: 16 }}>Cart</h2>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Qty</th>
-              <th>Rate</th>
-              <th>Line Total</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
+        <aside className="pos-cart">
+          <div className="pos-cart-header">
+            <div>
+              <h2>Order Summary</h2>
+              <p>
+                {itemCount.toLocaleString()} item{itemCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            {cart.length > 0 && (
+              <button
+                type="button"
+                className="icon-button icon-only icon-button-danger"
+                title="Clear cart"
+                onClick={resetCart}
+              >
+                <Icon name="trash" size={16} />
+              </button>
+            )}
+          </div>
+
+          <div className="pos-cart-list">
             {cart.length === 0 ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="table-empty">
-                    <Icon name="shirt" size={32} className="table-empty-icon" />
-                    <div>Select a product to add it</div>
-                  </div>
-                </td>
-              </tr>
+              <div className="pos-cart-empty">
+                <Icon name="bag" size={34} className="pos-cart-empty-icon" />
+                <div>Cart is empty</div>
+                <p className="cell-muted">Select products from the catalog</p>
+              </div>
             ) : (
-              cart.map((item) => (
-                <tr key={item.key}>
-                  <td>
-                    {item.product.name}
-                    <div className="muted">
-                      {item.product.service} · {item.product.category}
+              cart.map((item) => {
+                const unitPrice = resolvedPrice(item);
+                const weight = isWeightUom(item.product);
+                return (
+                  <div className="pos-cart-item" key={item.key}>
+                    <div className="pos-cart-item-head">
+                      <div>
+                        <div className="pos-cart-item-name">{item.product.name}</div>
+                        <div className="pos-cart-item-meta">
+                          {item.product.service} · {item.product.category}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-button icon-only icon-button-danger"
+                        title="Remove"
+                        onClick={() => removeItem(item.key)}
+                      >
+                        <Icon name="trash" size={15} />
+                      </button>
                     </div>
-                  </td>
-                  <td>
-                    {isWeightUom(item.product) ? (
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        className="form-input"
-                        style={{ maxWidth: 90, textAlign: "right" }}
-                        value={item.quantity}
-                        onChange={(event) =>
-                          setQuantityValue(item.key, event.target.value)
-                        }
-                        aria-label={`Quantity for ${item.product.name}`}
-                      />
-                    ) : (
-                      <div className="row-actions">
+
+                    <div className="pos-cart-item-controls">
+                      <div className="qty-stepper">
                         <button
                           type="button"
-                          className="btn btn-sm btn-secondary"
+                          className="qty-step-btn"
                           onClick={() => changeQuantity(item.key, -1)}
+                          disabled={item.quantity <= 0}
                         >
                           −
                         </button>
-                        <span style={{ minWidth: 32, textAlign: "center", fontWeight: 700 }}>
-                          {item.quantity}
-                        </span>
+                        {weight ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            className="qty-input qty-input-weight"
+                            value={item.quantity}
+                            onChange={(event) =>
+                              setQuantityValue(item.key, event.target.value)
+                            }
+                            aria-label={`Quantity for ${item.product.name}`}
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            className="qty-input"
+                            value={item.quantity}
+                            onChange={(event) =>
+                              setQuantityValue(item.key, event.target.value)
+                            }
+                            aria-label={`Quantity for ${item.product.name}`}
+                          />
+                        )}
                         <button
                           type="button"
-                          className="btn btn-sm btn-secondary"
+                          className="qty-step-btn"
                           onClick={() => changeQuantity(item.key, 1)}
                         >
                           +
                         </button>
                       </div>
-                    )}
-                  </td>
-                  <td className="cell-total">{formatMoney(item.product.price)}</td>
-                  <td className="cell-total">
-                    {formatMoney(item.product.price * item.quantity)}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="icon-button icon-only icon-button-danger"
-                      title="Remove"
-                      onClick={() => removeItem(item.key)}
-                    >
-                      <Icon name="trash" size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
 
-        <div className="modal-actions">
-          <div className="form-field" style={{ minWidth: 140 }}>
-            <label htmlFor="pos-discount">Discount</label>
-            <input
-              id="pos-discount"
-              type="number"
-              min="0"
-              step="0.01"
-              className="form-input"
-              value={discount}
-              onChange={(event) => setDiscount(event.target.value)}
-              placeholder="0.00"
-            />
-          </div>
-          <div style={{ flex: 1 }} />
-          <div style={{ textAlign: "right", marginRight: 12 }}>
-            <div className="cell-muted">Subtotal</div>
-            <div className="money" style={{ fontSize: 18 }}>
-              {formatMoney(subtotal)}
-            </div>
-            {discountNum > 0 && (
-              <div className="cell-muted">Discount −{formatMoney(discountNum)}</div>
+                      <div className="rate-input-wrap">
+                        <span className="rate-input-symbol">{currencySymbol}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="rate-input"
+                          value={item.unitPrice}
+                          onChange={(event) =>
+                            setUnitPriceValue(item.key, event.target.value)
+                          }
+                          placeholder="0.00"
+                          aria-label={`Unit price for ${item.product.name}`}
+                        />
+                      </div>
+
+                      <div className="pos-cart-line-total">
+                        {money(round2(unitPrice * item.quantity))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             )}
-            <div className="cell-muted">Estimated total</div>
-            <div className="money" style={{ fontSize: 22 }}>
-              {formatMoney(estimatedTotal)}
+          </div>
+
+          <div className="pos-summary">
+            <div className="pos-summary-row">
+              <span>Subtotal</span>
+              <span>{money(round2(subtotal))}</span>
+            </div>
+            <div className="pos-summary-row">
+              <span>Discount</span>
+              <div className="discount-input-wrap">
+                <span className="rate-input-symbol">−</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="rate-input discount-input"
+                  value={discount}
+                  onChange={(event) => setDiscount(event.target.value)}
+                  placeholder="0.00"
+                  aria-label="Discount amount"
+                />
+              </div>
+            </div>
+            {taxAmount > 0 && (
+              <div className="pos-summary-row">
+                <span>Tax ({taxRate}%)</span>
+                <span>{money(taxAmount)}</span>
+              </div>
+            )}
+            <div className="pos-summary-row pos-summary-grand">
+              <span>Grand Total</span>
+              <span>{money(grandTotal)}</span>
             </div>
           </div>
+
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-primary pos-place-btn"
             disabled={placing || cart.length === 0}
             onClick={handlePlaceOrder}
           >
-            {placing ? "Placing..." : "Place Order"}
+            {placing ? "Placing..." : `Place Order · ${money(grandTotal)}`}
           </button>
-        </div>
+        </aside>
       </div>
     </DashboardLayout>
   );

@@ -78,6 +78,18 @@ const groups: NavGroup[] = [
 
 const settingsLink: NavItem = { to: "/settings", label: "Settings", icon: "settings" };
 
+const GROUP_OPEN_KEY = "clothncare.sidebar.groups";
+
+const loadOpenGroups = (): Record<string, boolean> => {
+  try {
+    const raw = localStorage.getItem(GROUP_OPEN_KEY);
+    if (raw) return JSON.parse(raw) as Record<string, boolean>;
+  } catch {
+    // ignore storage errors
+  }
+  return {};
+};
+
 function SidebarGroup({
   group,
   open,
@@ -138,18 +150,26 @@ export default function Sidebar() {
     [admin],
   );
 
-  const [explicit, setExplicit] = useState<Record<string, boolean>>({});
+  const [explicit, setExplicit] = useState<Record<string, boolean>>(loadOpenGroups);
 
-  const isGroupOpen = (group: NavGroup) =>
-    group.key in explicit ? explicit[group.key] !== false : false;
+  const isGroupOpen = (group: NavGroup) => {
+    if (group.key in explicit) {
+      return explicit[group.key] !== false;
+    }
+    return group.items.some((item) => isItemActive(item.to));
+  };
 
   const toggleGroup = (key: string) => {
-    const group = visibleGroups.find((entry) => entry.key === key);
-    if (!group) return;
-    setExplicit((current) => ({
-      ...current,
-      [key]: !isGroupOpen(group),
-    }));
+    setExplicit((current) => {
+      const wasOpen = key in current ? current[key] !== false : false;
+      const next = { ...current, [key]: !wasOpen };
+      try {
+        localStorage.setItem(GROUP_OPEN_KEY, JSON.stringify(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
   };
 
   const renderLink = ({ to, label, icon }: NavItem) => {

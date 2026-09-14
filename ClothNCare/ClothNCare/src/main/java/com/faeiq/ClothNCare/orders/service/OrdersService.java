@@ -278,6 +278,9 @@ public class OrdersService {
     }
 
     private BigDecimal resolveUnitPrice(OrderItemsDTO itemDTO, Product product, String service, String productType) {
+        if (itemDTO.getUnitPrice() != null && itemDTO.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
+            return itemDTO.getUnitPrice();
+        }
         if (product != null) {
             if (product.getPrice() != null && product.getPrice().compareTo(BigDecimal.ZERO) > 0) {
                 return product.getPrice();
@@ -287,9 +290,6 @@ public class OrdersService {
             } catch (RuntimeException ignore) {
                 return null;
             }
-        }
-        if (itemDTO.getUnitPrice() != null && itemDTO.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
-            return itemDTO.getUnitPrice();
         }
         try {
             return laundryServiceService.getPrice(itemDTO.getServiceType(), itemDTO.getProductType());
