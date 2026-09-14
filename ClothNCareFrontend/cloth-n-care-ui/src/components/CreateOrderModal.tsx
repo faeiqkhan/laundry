@@ -85,10 +85,12 @@ export default function CreateOrderModal({ order, onClose, onSuccess }: Props) {
   const [discount, setDiscount] = useState(
     order && order.discount > 0 ? String(order.discount) : "",
   );
-  const [deliveryDate, setDeliveryDate] = useState(
-    order?.expectedDeliveryDate ??
-      new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-  );
+  const [deliveryDate, setDeliveryDate] = useState(() => {
+    if (order?.expectedDeliveryDate) return order.expectedDeliveryDate;
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return d.toISOString().split("T")[0];
+  });
 
   const serviceNames = useMemo(() => Array.from(catalog.keys()), [catalog]);
 

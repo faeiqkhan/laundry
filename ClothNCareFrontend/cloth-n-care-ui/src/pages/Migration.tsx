@@ -458,13 +458,11 @@ export default function MigrationPage() {
     expenses?: File;
     payments?: File;
   }>({});
-  const fileRefs = {
-    booked: useRef<HTMLInputElement>(null),
-    invoices: useRef<HTMLInputElement>(null),
-    orderDetails: useRef<HTMLInputElement>(null),
-    expenses: useRef<HTMLInputElement>(null),
-    payments: useRef<HTMLInputElement>(null),
-  };
+  const bookedRef = useRef<HTMLInputElement>(null);
+  const invoicesRef = useRef<HTMLInputElement>(null);
+  const orderDetailsRef = useRef<HTMLInputElement>(null);
+  const expensesRef = useRef<HTMLInputElement>(null);
+  const paymentsRef = useRef<HTMLInputElement>(null);
 
   const loadStatus = () => {
     getMigrationStatus()
@@ -568,7 +566,7 @@ export default function MigrationPage() {
               <label className="form-field">
                 <span>Booked Laundry CSV</span>
                 <input
-                  ref={fileRefs.booked}
+                  ref={bookedRef}
                   type="file"
                   accept=".csv"
                   className="form-input"
@@ -578,7 +576,7 @@ export default function MigrationPage() {
               <label className="form-field">
                 <span>Invoices CSV</span>
                 <input
-                  ref={fileRefs.invoices}
+                  ref={invoicesRef}
                   type="file"
                   accept=".csv"
                   className="form-input"
@@ -588,7 +586,7 @@ export default function MigrationPage() {
               <label className="form-field">
                 <span>Order Details CSV</span>
                 <input
-                  ref={fileRefs.orderDetails}
+                  ref={orderDetailsRef}
                   type="file"
                   accept=".csv"
                   className="form-input"
@@ -598,7 +596,7 @@ export default function MigrationPage() {
               <label className="form-field">
                 <span>Expenses CSV</span>
                 <input
-                  ref={fileRefs.expenses}
+                  ref={expensesRef}
                   type="file"
                   accept=".csv"
                   className="form-input"
@@ -608,7 +606,7 @@ export default function MigrationPage() {
               <label className="form-field">
                 <span>Payments (received) CSV</span>
                 <input
-                  ref={fileRefs.payments}
+                  ref={paymentsRef}
                   type="file"
                   accept=".csv"
                   className="form-input"
