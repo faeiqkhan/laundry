@@ -57,7 +57,6 @@ export default function WhatsAppHistoryReport() {
   }, [statusFilter]);
 
   useEffect(() => {
-    setLoading(true);
     load();
   }, [load, refreshKey]);
 
@@ -65,6 +64,7 @@ export default function WhatsAppHistoryReport() {
     setRetrying(id);
     try {
       await retryWhatsAppMessage(id);
+      setLoading(true);
       setRefreshKey((k) => k + 1);
     } catch (err) {
       console.error(err);
@@ -209,7 +209,10 @@ export default function WhatsAppHistoryReport() {
         <select
           className="form-input filter-select"
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
+          onChange={(event) => {
+            setLoading(true);
+            setStatusFilter(event.target.value);
+          }}
         >
           {STATUS_OPTIONS.map((status) => (
             <option key={status} value={status}>
