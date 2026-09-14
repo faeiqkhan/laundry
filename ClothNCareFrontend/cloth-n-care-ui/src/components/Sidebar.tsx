@@ -19,6 +19,7 @@ interface NavGroup {
 }
 
 const dashboardLink: NavItem = { to: "/dashboard", label: "Dashboard", icon: "dashboard" };
+const posLink: NavItem = { to: "/pos", label: "Order POS", icon: "cart" };
 
 const mastersNav: NavItem[] = [
   { to: "/customers", label: "Customer", icon: "customers" },
@@ -195,13 +196,14 @@ export default function Sidebar() {
           <Icon name="shirt" size={22} />
         </div>
         <div className="sidebar-brand-text">
-          <span className="sidebar-brand-name">Cloth n Care</span>
+          <span className="sidebar-brand-name">Cloth &amp; Care</span>
           <span className="sidebar-brand-tagline">Laundry Management</span>
         </div>
       </div>
 
       <nav className="sidebar-nav" aria-label="Main navigation">
         {renderLink(dashboardLink)}
+        {renderLink(posLink)}
 
         {visibleGroups.map((group) => (
           <SidebarGroup

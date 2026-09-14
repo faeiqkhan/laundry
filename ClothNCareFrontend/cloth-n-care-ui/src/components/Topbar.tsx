@@ -64,7 +64,7 @@ export default function Topbar({
   const role = user?.role ?? "STAFF";
   const lanUrl = getLanUrl();
 
-  const title = pageTitles[location.pathname] ?? "Cloth n Care";
+  const title = pageTitles[location.pathname] ?? "Cloth & Care";
 
   const handleLogout = () => {
     localStorage.removeItem("token");

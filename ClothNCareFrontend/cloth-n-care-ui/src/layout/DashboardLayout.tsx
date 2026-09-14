@@ -11,6 +11,7 @@ interface DashboardLayoutProps {
 
 const mobileLinks = [
   { to: "/dashboard", label: "Home", icon: "dashboard" },
+  { to: "/pos", label: "Order POS", icon: "cart" },
   { to: "/orders", label: "Orders", icon: "orders" },
   { to: "/customers", label: "Customers", icon: "customers" },
   { to: "/reports", label: "Reports", icon: "reports" },

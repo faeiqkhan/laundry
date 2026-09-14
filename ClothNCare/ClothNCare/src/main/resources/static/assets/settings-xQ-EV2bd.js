@@ -1,1 +1,0 @@
-import{t as e}from"./axios-BQWIQ4uc.js";var t=async()=>(await e.get(`/settings`)).data.data,n=async t=>(await e.put(`/settings`,t)).data.data;export{n,t};

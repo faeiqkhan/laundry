@@ -2542,3 +2542,25 @@
 .card-error {
   border-color: var(--danger-100);
 }
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.pagination-info {
+  color: var(--slate-500);
+  font-size: 13px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}

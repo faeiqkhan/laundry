@@ -9,6 +9,7 @@ import com.faeiq.ClothNCare.orders.repository.OrdersRepository;
 import com.faeiq.ClothNCare.settings.entity.AppSettings;
 import com.faeiq.ClothNCare.settings.service.SettingsService;
 import com.lowagie.text.Document;
+import com.lowagie.text.Image;
 import com.lowagie.text.Element;
 import com.lowagie.text.Font;
 import com.lowagie.text.FontFactory;
@@ -27,11 +28,18 @@ import java.awt.Color;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.qrcode.QRCodeWriter;
 
 @Service
 @RequiredArgsConstructor
@@ -110,7 +118,7 @@ public class InvoiceService {
             buildMetaAndBillTo(document, order);
             buildItemsTable(document, order);
             buildTotals(document, order, settings);
-            buildTermsAndSign(document, settings);
+            buildTermsAndSign(document, order, settings);
 
             document.close();
 
@@ -222,7 +230,7 @@ public class InvoiceService {
         addTotalRow(document, "Total Payable", money(order.getBalanceDue(), symbol), true);
     }
 
-    private void buildTermsAndSign(Document document, AppSettings settings) {
+    private void buildTermsAndSign(Document document, Orders order, AppSettings settings) throws Exception {
         if (settings.getTermsAndConditions() != null && !settings.getTermsAndConditions().isBlank()) {
             Paragraph heading = new Paragraph("Terms & Conditions", BOLD_FONT);
             heading.setSpacingBefore(6);
@@ -257,9 +265,34 @@ public class InvoiceService {
 
         document.add(sign);
 
+        addPaymentQr(document, order, settings);
+        addStoreSignature(document, settings);
+
         if (settings.getInvoiceFooter() != null && !settings.getInvoiceFooter().isBlank()) {
             addCentered(document, settings.getInvoiceFooter(), BOLD_FONT);
         }
+    }
+
+    private void addPaymentQr(Document document, Orders order, AppSettings settings) throws Exception {
+        BigDecimal due = order.getBalanceDue();
+        if (due == null || due.compareTo(BigDecimal.ZERO) <= 0 || settings.getUpiId() == null || settings.getUpiId().isBlank()) return;
+        String note = "Invoice " + (order.getInvoice_number() == null ? order.getId() : order.getInvoice_number());
+        String uri = "upi://pay?pa=" + URLEncoder.encode(settings.getUpiId(), StandardCharsets.UTF_8)
+                + "&pn=" + URLEncoder.encode(settings.getBusinessName(), StandardCharsets.UTF_8)
+                + "&am=" + due.setScale(2, RoundingMode.HALF_UP).toPlainString()
+                + "&cu=INR&tn=" + URLEncoder.encode(note, StandardCharsets.UTF_8);
+        BufferedImage matrix = new BufferedImage(120, 120, BufferedImage.TYPE_INT_RGB);
+        var bits = new QRCodeWriter().encode(uri, BarcodeFormat.QR_CODE, 120, 120);
+        for (int y = 0; y < 120; y++) for (int x = 0; x < 120; x++) matrix.setRGB(x, y, bits.get(x, y) ? Color.BLACK.getRGB() : Color.WHITE.getRGB());
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); ImageIO.write(matrix, "png", bytes);
+        addCentered(document, "Scan to Pay " + money(due, currencySymbol(settings)), BOLD_FONT);
+        Image qr = Image.getInstance(bytes.toByteArray()); qr.setAlignment(Element.ALIGN_CENTER); qr.scaleToFit(105, 105); document.add(qr);
+    }
+
+    private void addStoreSignature(Document document, AppSettings settings) throws Exception {
+        if (settings.getStoreSignaturePath() == null || settings.getStoreSignaturePath().isBlank() || !Files.exists(Path.of(settings.getStoreSignaturePath()))) return;
+        Image signature = Image.getInstance(settings.getStoreSignaturePath()); signature.setAlignment(Element.ALIGN_CENTER); signature.scaleToFit(120, 45); document.add(signature);
+        addCentered(document, "Authorized Signature", SMALL_FONT);
     }
 
     private void addMetaRow(Document document, String label, String value) {

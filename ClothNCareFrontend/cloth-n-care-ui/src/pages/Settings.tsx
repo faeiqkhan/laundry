@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   getSettings,
   updateSettings,
+  uploadStoreSignature,
   type Settings as SettingsData,
 } from "../api/settings";
 import { isAdmin } from "../utils/auth";
@@ -57,6 +58,7 @@ export default function SettingsPage() {
         taxRate: settings.taxRate,
         invoiceFooter: settings.invoiceFooter,
         termsAndConditions: settings.termsAndConditions,
+        upiId: settings.upiId,
         whatsAppEnabled: settings.whatsAppEnabled,
         whatsAppPhoneNumberId: settings.whatsAppPhoneNumberId,
         whatsAppAccessToken: settings.whatsAppAccessToken,
@@ -70,6 +72,10 @@ export default function SettingsPage() {
         whatsAppAutoWelcome: settings.whatsAppAutoWelcome,
         whatsAppAutoInvoice: settings.whatsAppAutoInvoice,
         whatsAppAutoStatus: settings.whatsAppAutoStatus,
+        whatsAppAutoThankYou: settings.whatsAppAutoThankYou,
+        whatsAppWelcomeMessage: settings.whatsAppWelcomeMessage,
+        whatsAppThankYouMessage: settings.whatsAppThankYouMessage,
+        whatsAppStatusMessage: settings.whatsAppStatusMessage,
       });
 
       setSettings(updated);
@@ -179,6 +185,19 @@ export default function SettingsPage() {
                 setSettings({ ...settings, address: event.target.value })
               }
             />
+          </div>
+          <div className="form-field">
+            <label>Business UPI ID</label>
+            <input className="form-input" placeholder="name@bank" value={settings.upiId ?? ""}
+              onChange={(event) => setSettings({ ...settings, upiId: event.target.value })} />
+            <p className="form-hint">Shown as a payment QR only when an invoice has a balance due.</p>
+          </div>
+          <div className="form-field">
+            <label>Store Signature Image</label>
+            <input type="file" accept="image/*" onChange={async (event) => {
+              const file = event.target.files?.[0]; if (!file) return;
+              try { setSettings(await uploadStoreSignature(file)); setSaved(true); } catch { setError("Failed to upload signature"); }
+            }} />
           </div>
 
           <div className="section-title">
@@ -401,6 +420,24 @@ export default function SettingsPage() {
             <h3>Automatic Notifications</h3>
           </div>
           <p className="form-hint">
+            Write messages in English, Hindi, or both. Available placeholders: {"{name}"}, {"{business}"}, {"{invoice}"}, {"{delivery}"}, {"{status}"}, and {"{message}"}.
+          </p>
+          <div className="form-field">
+            <label>Welcome Message</label>
+            <textarea className="form-textarea" rows={5} value={settings.whatsAppWelcomeMessage ?? ""}
+              onChange={(event) => setSettings({ ...settings, whatsAppWelcomeMessage: event.target.value })} />
+          </div>
+          <div className="form-field">
+            <label>Thank-you Message</label>
+            <textarea className="form-textarea" rows={4} value={settings.whatsAppThankYouMessage ?? ""}
+              onChange={(event) => setSettings({ ...settings, whatsAppThankYouMessage: event.target.value })} />
+          </div>
+          <div className="form-field">
+            <label>Status-update Message</label>
+            <textarea className="form-textarea" rows={5} value={settings.whatsAppStatusMessage ?? ""}
+              onChange={(event) => setSettings({ ...settings, whatsAppStatusMessage: event.target.value })} />
+          </div>
+          <p className="form-hint">
             All automatic notifications are OFF by default. Turn them on when
             you are ready to contact real customers. Test mode (above) still
             redirects them to the test number.
@@ -415,6 +452,13 @@ export default function SettingsPage() {
                 }
               />
               Send welcome message when a customer is added
+            </label>
+          </div>
+          <div className="form-field form-check">
+            <label>
+              <input type="checkbox" checked={settings.whatsAppAutoThankYou ?? false}
+                onChange={(event) => setSettings({ ...settings, whatsAppAutoThankYou: event.target.checked })} />
+              Send a thank-you message when an order is created
             </label>
           </div>
           <div className="form-field form-check">

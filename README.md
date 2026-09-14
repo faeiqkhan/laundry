@@ -1,4 +1,4 @@
-# Cloth n Care
+# Cloth & Care
 
 Laundry management app for a small business, designed to run on the client's own
 PC and be used from any device on their private network. No cloud hosting.

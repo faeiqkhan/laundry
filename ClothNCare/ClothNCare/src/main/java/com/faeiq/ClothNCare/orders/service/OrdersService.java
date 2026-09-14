@@ -294,6 +294,16 @@ public class OrdersService {
 
     @Transactional(readOnly = true)
     public Page<OrderResponseDTO> getOrderPage(Pageable pageable, String status, String payment, String q) {
+        // The normal Orders screen opens with no filters. Use the repository's
+        // direct paging query in that case instead of building an empty
+        // Specification, which has caused SQLite/Hibernate paging failures in
+        // deployed databases.
+        if ((status == null || status.isBlank())
+                && (payment == null || payment.isBlank())
+                && (q == null || q.isBlank())) {
+            return ordersRepository.findAll(pageable)
+                    .map(order -> toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId())));
+        }
         return ordersRepository.findAll(buildOrderFilter(status, payment, q), pageable)
                 .map(order -> toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId())));
     }

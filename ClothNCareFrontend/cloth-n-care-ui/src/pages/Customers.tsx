@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  getCustomers,
+  getCustomerPage,
   getCustomerById,
   updateCustomer,
   type Customer,
@@ -10,6 +10,7 @@ import {
 import CreateCustomerModal from "../components/CreateCustomerModal";
 import CustomerDetailDrawer from "../components/CustomerDetailDrawer";
 import ImportExportButtons from "../components/ImportExportButtons";
+import Pagination from "../components/Pagination";
 import Icon from "../components/Icons";
 import DashboardLayout from "../layout/DashboardLayout";
 import { formatDate } from "../utils/format";
@@ -161,25 +162,41 @@ function EditCustomerModal({
 }
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [rows, setRows] = useState<Customer[]>([]);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
   const [selected, setSelected] = useState<CustomerDetail | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  const fetchCustomers = async () => {
-    const data = await getCustomers();
-    setCustomers(data);
-  };
+  const reload = () => setReloadKey((key) => key + 1);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(0);
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     let ignore = false;
 
-    getCustomers()
+    getCustomerPage({
+      page,
+      q: debouncedSearch || undefined,
+    })
       .then((data) => {
-        if (!ignore) setCustomers(data);
+        if (ignore) return;
+        setRows(data.content);
+        setTotalPages(data.totalPages);
+        setTotalElements(data.totalElements);
       })
       .catch((error) => console.error(error))
       .finally(() => {
@@ -189,18 +206,7 @@ export default function CustomersPage() {
     return () => {
       ignore = true;
     };
-  }, []);
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return customers;
-    return customers.filter(
-      (customer) =>
-        customer.name.toLowerCase().includes(term) ||
-        customer.phone.includes(term) ||
-        (customer.email ?? "").toLowerCase().includes(term),
-    );
-  }, [customers, search]);
+  }, [page, reloadKey, debouncedSearch]);
 
   const openDrawer = async (customer: Customer) => {
     setDrawerLoading(true);
@@ -234,13 +240,13 @@ export default function CustomersPage() {
       <div className="page-header">
         <div className="page-header-text">
           <h1>Customers</h1>
-          <p>{customers.length} registered customers</p>
+          <p>{totalElements} registered customers</p>
         </div>
 
         <div className="page-header-actions">
           <ImportExportButtons
             resource="customers"
-            onImported={fetchCustomers}
+            onImported={reload}
           />
           <button
             type="button"
@@ -278,7 +284,7 @@ export default function CustomersPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {rows.length === 0 ? (
               <tr>
                 <td colSpan={6}>
                   <div className="table-empty">
@@ -288,7 +294,7 @@ export default function CustomersPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((customer) => (
+              rows.map((customer) => (
                 <tr key={customer.id}>
                   <td>
                     <div style={{ fontWeight: 700 }}>{customer.name}</div>
@@ -324,13 +330,21 @@ export default function CustomersPage() {
             )}
           </tbody>
         </table>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalElements={totalElements}
+          pageSize={10}
+          onPageChange={setPage}
+        />
       </div>
 
       {showCreateModal && (
         <CreateCustomerModal
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
-            fetchCustomers().catch((error) => console.error(error));
+            reload();
           }}
         />
       )}
@@ -339,7 +353,7 @@ export default function CustomersPage() {
         <EditCustomerModal
           customer={editing}
           onClose={() => setEditing(null)}
-          onSuccess={fetchCustomers}
+          onSuccess={reload}
         />
       )}
 

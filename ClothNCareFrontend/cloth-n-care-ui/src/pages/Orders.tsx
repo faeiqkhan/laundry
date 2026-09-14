@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import CreateOrderModal from "../components/CreateOrderModal";
 import OrderDetailDrawer from "../components/OrderDetailDrawer";
 import StatusBadge from "../components/StatusBadge";
 import Icon from "../components/Icons";
-import { getOrders, deleteOrder } from "../api/orders";
+import Pagination from "../components/Pagination";
+import { getOrderPage, getOrderOverview, deleteOrder } from "../api/orders";
 import { printOrderTag, downloadInvoice } from "../utils/invoice";
 import DashboardLayout from "../layout/DashboardLayout";
 import ImportExportButtons from "../components/ImportExportButtons";
@@ -14,28 +15,92 @@ import { canManage } from "../utils/auth";
 
 const statusFilters = ["ALL", ...ORDER_STATUSES];
 const paymentFilters = ["ALL", "PAID", "PARTIAL", "UNPAID"];
+const sortOptions = [
+  { value: "created_at,desc", label: "Newest first" },
+  { value: "created_at,asc", label: "Oldest first" },
+  { value: "expected_delivery_date,desc", label: "Delivery date" },
+  { value: "total_price,desc", label: "Amount (high to low)" },
+];
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [rows, setRows] = useState<Order[]>([]);
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [overview, setOverview] = useState<{
+    total: number;
+    active: number;
+    due: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [selected, setSelected] = useState<Order | null>(null);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [paymentFilter, setPaymentFilter] = useState("ALL");
+  const [sortBy, setSortBy] = useState("created_at,desc");
 
-  const fetchOrders = async () => {
-    try {
-      const data = await getOrders();
-      setOrders(data);
-      setSelected((current) =>
-        current ? data.find((order) => order.id === current.id) ?? null : null,
-      );
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const reload = () => setReloadKey((key) => key + 1);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(0);
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    getOrderPage({
+      page,
+      q: debouncedSearch || undefined,
+      status: statusFilter === "ALL" ? undefined : statusFilter,
+      payment: paymentFilter === "ALL" ? undefined : paymentFilter,
+      sort: sortBy,
+    })
+      .then((data) => {
+        if (ignore) return;
+        setLoadError(null);
+        setRows(data.content);
+        setTotalPages(data.totalPages);
+        setTotalElements(data.totalElements);
+        setSelected((current) =>
+          current ? data.content.find((order) => order.id === current.id) ?? null : null,
+        );
+      })
+      .catch((err) => {
+        console.error(err);
+        if (!ignore) {
+          setRows([]);
+          setLoadError("Could not load orders. Check your connection and sign in again if needed.");
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [page, reloadKey, debouncedSearch, statusFilter, paymentFilter, sortBy]);
+
+  useEffect(() => {
+    let ignore = false;
+    getOrderOverview()
+      .then((data) => {
+        if (!ignore) setOverview(data);
+      })
+      .catch(() => {});
+    return () => {
+      ignore = true;
+    };
+  }, [reloadKey]);
 
   const handleDelete = async (order: Order) => {
     if (!window.confirm(`Delete order ${order.invoiceNumber ?? order.id.slice(0, 8)}? This cannot be undone.`)) {
@@ -44,57 +109,13 @@ export default function OrdersPage() {
     try {
       await deleteOrder(order.id);
       if (selected?.id === order.id) setSelected(null);
-      await fetchOrders();
+      setPage(0);
+      reload();
     } catch (err) {
       console.error(err);
       window.alert("Failed to delete order");
     }
   };
-
-  useEffect(() => {
-    let ignore = false;
-
-    getOrders()
-      .then((data) => {
-        if (!ignore) setOrders(data);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => {
-        if (!ignore) setLoading(false);
-      });
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return orders.filter((order) => {
-      if (statusFilter !== "ALL" && order.status !== statusFilter) return false;
-      if (paymentFilter !== "ALL" && order.paymentStatus !== paymentFilter) {
-        return false;
-      }
-      if (!term) return true;
-      return (
-        order.customerName?.toLowerCase().includes(term) ||
-        order.customerPhone?.toLowerCase().includes(term) ||
-        order.id.toLowerCase().includes(term) ||
-        (order.invoiceNumber ?? "").toLowerCase().includes(term)
-      );
-    });
-  }, [orders, search, statusFilter, paymentFilter]);
-
-  const counts = useMemo(() => {
-    const active = orders.filter(
-      (order) => order.status !== "DELIVERED" && order.status !== "CANCELLED",
-    ).length;
-    const due = orders.filter(
-      (order) =>
-        order.balanceDue > 0 && order.status !== "CANCELLED",
-    ).length;
-    return { active, due };
-  }, [orders]);
 
   if (loading) {
     return (
@@ -104,21 +125,22 @@ export default function OrdersPage() {
     );
   }
 
+  const summary = overview
+    ? `${overview.total} total · ${overview.active} active · ${overview.due} with outstanding balance`
+    : `${totalElements} total`;
+
   return (
     <DashboardLayout>
       <div className="page-header">
         <div className="page-header-text">
           <h1>Orders</h1>
-          <p>
-            {orders.length} total · {counts.active} active · {counts.due}{" "}
-            with outstanding balance
-          </p>
+          <p>{summary}</p>
         </div>
 
         <div className="page-header-actions">
           <ImportExportButtons
             resource="orders"
-            onImported={fetchOrders}
+            onImported={reload}
           />
           <button
             type="button"
@@ -145,7 +167,10 @@ export default function OrdersPage() {
         <select
           className="filter-select"
           value={statusFilter}
-          onChange={(event) => setStatusFilter(event.target.value)}
+          onChange={(event) => {
+            setStatusFilter(event.target.value);
+            setPage(0);
+          }}
           aria-label="Filter by status"
         >
           {statusFilters.map((status) => (
@@ -158,12 +183,31 @@ export default function OrdersPage() {
         <select
           className="filter-select"
           value={paymentFilter}
-          onChange={(event) => setPaymentFilter(event.target.value)}
+          onChange={(event) => {
+            setPaymentFilter(event.target.value);
+            setPage(0);
+          }}
           aria-label="Filter by payment"
         >
           {paymentFilters.map((status) => (
             <option key={status} value={status}>
               {status === "ALL" ? "All payments" : status}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="filter-select"
+          value={sortBy}
+          onChange={(event) => {
+            setSortBy(event.target.value);
+            setPage(0);
+          }}
+          aria-label="Sort orders"
+        >
+          {sortOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -183,7 +227,18 @@ export default function OrdersPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 ? (
+            {loadError ? (
+              <tr>
+                <td colSpan={7}>
+                  <div className="table-empty">
+                    <div>{loadError}</div>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={reload}>
+                      Retry
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={7}>
                   <div className="table-empty">
@@ -193,7 +248,7 @@ export default function OrdersPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((order) => (
+              rows.map((order) => (
                 <tr
                   key={order.id}
                   onClick={() => setSelected(order)}
@@ -295,12 +350,20 @@ export default function OrdersPage() {
             )}
           </tbody>
         </table>
+
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalElements={totalElements}
+          pageSize={10}
+          onPageChange={setPage}
+        />
       </div>
 
       {showModal && (
         <CreateOrderModal
           onClose={() => setShowModal(false)}
-          onSuccess={fetchOrders}
+          onSuccess={reload}
         />
       )}
 
@@ -308,7 +371,7 @@ export default function OrdersPage() {
         <OrderDetailDrawer
           order={selected}
           onClose={() => setSelected(null)}
-          onUpdated={fetchOrders}
+          onUpdated={reload}
           onEdit={(order) => {
             setSelected(null);
             setEditOrder(order);
@@ -320,7 +383,7 @@ export default function OrdersPage() {
         <CreateOrderModal
           order={editOrder}
           onClose={() => setEditOrder(null)}
-          onSuccess={fetchOrders}
+          onSuccess={reload}
         />
       )}
     </DashboardLayout>

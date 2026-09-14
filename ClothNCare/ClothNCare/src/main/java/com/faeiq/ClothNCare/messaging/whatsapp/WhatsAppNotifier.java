@@ -250,7 +250,7 @@ public class WhatsAppNotifier {
     }
 
     private String businessName(AppSettings settings) {
-        return isBlank(settings.getBusinessName()) ? "Cloth n Care" : settings.getBusinessName();
+        return isBlank(settings.getBusinessName()) ? "Cloth & Care" : settings.getBusinessName();
     }
 
     private String fmt(BigDecimal value) {

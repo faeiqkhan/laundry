@@ -15,8 +15,13 @@ public class SettingsService {
 
     @Transactional
     public AppSettings getSettings() {
-        return settingsRepository.findById(1L)
+        AppSettings settings = settingsRepository.findById(1L)
                 .orElseGet(() -> settingsRepository.save(new AppSettings()));
+        if ("Cloth n Care".equals(settings.getBusinessName())) {
+            settings.setBusinessName("Cloth & Care");
+            settingsRepository.save(settings);
+        }
+        return settings;
     }
 
     @Transactional
@@ -33,6 +38,7 @@ public class SettingsService {
         settings.setInvoiceFooter(dto.getInvoiceFooter() == null ? settings.getInvoiceFooter() : dto.getInvoiceFooter());
         settings.setTermsAndConditions(dto.getTermsAndConditions() == null
                 ? settings.getTermsAndConditions() : dto.getTermsAndConditions());
+        settings.setUpiId(dto.getUpiId() == null ? settings.getUpiId() : dto.getUpiId().trim());
         if (dto.getWhatsAppEnabled() != null) {
             settings.setWhatsAppEnabled(dto.getWhatsAppEnabled());
         }
@@ -89,5 +95,10 @@ public class SettingsService {
         settings.setInvoiceCounter(settings.getInvoiceCounter() + 1);
         settingsRepository.save(settings);
         return String.format("INV-%d-%06d", java.time.LocalDate.now().getYear(), settings.getInvoiceCounter());
+    }
+
+    @Transactional
+    public AppSettings save(AppSettings settings) {
+        return settingsRepository.save(settings);
     }
 }
