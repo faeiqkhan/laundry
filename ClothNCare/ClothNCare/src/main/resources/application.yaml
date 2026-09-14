@@ -29,3 +29,7 @@ whatsapp:
   delivery-poll-interval-ms: ${WHATSAPP_DELIVERY_POLL_INTERVAL_MS:30000}
   connect-timeout-ms: ${WHATSAPP_CONNECT_TIMEOUT_MS:5000}
   read-timeout-ms: ${WHATSAPP_READ_TIMEOUT_MS:20000}
+
+migration:
+  swash-data-dir: ${MIGRATION_SWASH_DATA_DIR:./swash-data}
+  enabled: ${MIGRATION_ENABLED:true}

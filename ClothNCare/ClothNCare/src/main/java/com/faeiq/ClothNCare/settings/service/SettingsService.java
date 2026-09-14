@@ -68,6 +68,13 @@ public class SettingsService {
     }
 
     @Transactional
+    public void updateInvoiceCounter(long counter) {
+        AppSettings settings = getSettings();
+        settings.setInvoiceCounter(counter);
+        settingsRepository.save(settings);
+    }
+
+    @Transactional
     public String nextInvoiceNumber() {
         AppSettings settings = getSettings();
         settings.setInvoiceCounter(settings.getInvoiceCounter() + 1);

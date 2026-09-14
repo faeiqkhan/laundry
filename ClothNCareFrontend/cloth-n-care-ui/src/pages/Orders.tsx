@@ -19,6 +19,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [selected, setSelected] = useState<Order | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -251,6 +252,17 @@ export default function OrdersPage() {
                         <Icon name="tag" size={16} />
                       </button>
 
+                      {order.status !== "CANCELLED" && (
+                        <button
+                          type="button"
+                          className="icon-button icon-only"
+                          title="Edit order"
+                          onClick={() => setEditOrder(order)}
+                        >
+                          <Icon name="edit" size={16} />
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         className="icon-button icon-only success"
@@ -297,6 +309,18 @@ export default function OrdersPage() {
           order={selected}
           onClose={() => setSelected(null)}
           onUpdated={fetchOrders}
+          onEdit={(order) => {
+            setSelected(null);
+            setEditOrder(order);
+          }}
+        />
+      )}
+
+      {editOrder && (
+        <CreateOrderModal
+          order={editOrder}
+          onClose={() => setEditOrder(null)}
+          onSuccess={fetchOrders}
         />
       )}
     </DashboardLayout>

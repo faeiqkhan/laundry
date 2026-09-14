@@ -29,7 +29,7 @@ public class Orders {
     @Enumerated(EnumType.STRING)
     private Status status= Status.RECEIVED;
 
-    @OneToMany(mappedBy = "orders", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "orders", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrdersItems> items;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
@@ -38,6 +38,8 @@ public class Orders {
     private BigDecimal total_price;
 
     private BigDecimal discount = BigDecimal.ZERO;
+
+    private BigDecimal additional_charges = BigDecimal.ZERO;
 
     private BigDecimal tax_amount = BigDecimal.ZERO;
 

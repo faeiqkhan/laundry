@@ -17,6 +17,7 @@ public class OrderResponseDTO {
     private Status status;
     private BigDecimal totalPrice;
     private BigDecimal discount;
+    private BigDecimal additionalCharges;
     private BigDecimal taxAmount;
     private BigDecimal paidAmount;
     private BigDecimal balanceDue;

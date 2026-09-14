@@ -42,6 +42,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OrdersService {
 
+    private static final long DEFAULT_DELIVERY_GAP_DAYS = 3L;
+
     private final CustomerRepository customerRepository;
     private final OrdersRepository ordersRepository;
     private final PaymentRepository paymentRepository;
@@ -67,9 +69,77 @@ public class OrdersService {
         order.setCreatedBy(getCurrentUser());
         order.setStatus(Status.RECEIVED);
         order.setExpected_delivery_date(orderDTO.getExpectedDeliveryDate() == null
-                ? java.time.LocalDate.now() : orderDTO.getExpectedDeliveryDate());
+                ? LocalDate.now().plusDays(DEFAULT_DELIVERY_GAP_DAYS) : orderDTO.getExpectedDeliveryDate());
         order.setCreated_at(LocalDateTime.now());
 
+        BigDecimal subtotal = applyItems(order, orderDTO);
+
+        BigDecimal discount = normalize(orderDTO.getDiscount());
+        if (discount.compareTo(subtotal) > 0) {
+            discount = subtotal;
+        }
+        BigDecimal taxAmount = computeTax(subtotal.subtract(discount));
+        BigDecimal grandTotal = subtotal.subtract(discount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+
+        order.setDiscount(discount);
+        order.setTax_amount(taxAmount);
+        order.setPaid_amount(BigDecimal.ZERO);
+        order.setTotal_price(grandTotal);
+        order.setInvoice_number(settingsService.nextInvoiceNumber());
+
+        Orders savedOrder = ordersRepository.save(order);
+        String invoiceUrl = invoiceService.generateInvoice(savedOrder.getId()).getInvoiceUrl();
+
+        whatsAppNotifier.notifyOrderCreated(savedOrder);
+
+        return toResponse(savedOrder, invoiceUrl);
+    }
+
+    @Transactional
+    public OrderResponseDTO updateOrder(String orderId, OrderDTO orderDTO) {
+        Orders order = ordersRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+
+        if (order.getStatus() == Status.CANCELLED) {
+            throw new BadRequestException("A CANCELLED order cannot be edited");
+        }
+
+        validateOrder(orderDTO);
+
+        if (orderDTO.getCustomerId() != null || orderDTO.getEmail() != null || orderDTO.getPhone() != null) {
+            Customer customer = findCustomer(orderDTO);
+            if (customer == null) {
+                throw new ResourceNotFoundException("Customer not found");
+            }
+            order.setCustomer(customer);
+        }
+
+        if (order.getItems() != null) {
+            order.getItems().clear();
+        }
+        BigDecimal subtotal = applyItems(order, orderDTO);
+
+        BigDecimal discount = normalize(orderDTO.getDiscount());
+        if (discount.compareTo(subtotal) > 0) {
+            discount = subtotal;
+        }
+        BigDecimal taxAmount = computeTax(subtotal.subtract(discount));
+        BigDecimal grandTotal = subtotal.subtract(discount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
+
+        order.setDiscount(discount);
+        order.setTax_amount(taxAmount);
+        order.setTotal_price(grandTotal);
+        if (orderDTO.getExpectedDeliveryDate() != null) {
+            order.setExpected_delivery_date(orderDTO.getExpectedDeliveryDate());
+        }
+
+        Orders savedOrder = ordersRepository.save(order);
+        String invoiceUrl = invoiceService.generateInvoice(savedOrder.getId()).getInvoiceUrl();
+
+        return toResponse(savedOrder, invoiceUrl);
+    }
+
+    private BigDecimal applyItems(Orders order, OrderDTO orderDTO) {
         List<OrdersItems> items = new ArrayList<>();
         BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -110,30 +180,16 @@ public class OrdersService {
             items.add(item);
         }
 
-        BigDecimal discount = normalize(orderDTO.getDiscount());
-        if (discount.compareTo(subtotal) > 0) {
-            discount = subtotal;
-        }
+        order.setItems(items);
+        return subtotal;
+    }
+
+    private BigDecimal computeTax(BigDecimal taxable) {
         BigDecimal taxRate = settingsService.getSettings().getTaxRate() == null
                 ? BigDecimal.ZERO : settingsService.getSettings().getTaxRate();
-        BigDecimal taxAmount = subtotal.subtract(discount)
+        return taxable
                 .multiply(taxRate.divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP))
                 .setScale(2, RoundingMode.HALF_UP);
-        BigDecimal grandTotal = subtotal.subtract(discount).add(taxAmount).setScale(2, RoundingMode.HALF_UP);
-
-        order.setDiscount(discount);
-        order.setTax_amount(taxAmount);
-        order.setPaid_amount(BigDecimal.ZERO);
-        order.setTotal_price(grandTotal);
-        order.setItems(items);
-        order.setInvoice_number(settingsService.nextInvoiceNumber());
-
-        Orders savedOrder = ordersRepository.save(order);
-        String invoiceUrl = invoiceService.generateInvoice(savedOrder.getId()).getInvoiceUrl();
-
-        whatsAppNotifier.notifyOrderCreated(savedOrder);
-
-        return toResponse(savedOrder, invoiceUrl);
     }
 
     @Transactional
@@ -369,6 +425,7 @@ public class OrdersService {
                 order.getStatus(),
                 order.getTotal_price(),
                 order.getDiscount(),
+                order.getAdditional_charges(),
                 order.getTax_amount(),
                 order.getPaid_amount(),
                 order.getBalanceDue(),

@@ -28,6 +28,7 @@ const PaymentReceivedPage = lazy(() => import("./pages/PaymentReceived"));
 const MultiExpensePage = lazy(() => import("./pages/MultiExpense"));
 const AnalyticalDashboardPage = lazy(() => import("./pages/AnalyticalDashboard"));
 const YearlyDashboardPage = lazy(() => import("./pages/YearlyDashboard"));
+const MigrationPage = lazy(() => import("./pages/Migration"));
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const token = localStorage.getItem("token");
@@ -251,6 +252,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <YearlyDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/migration"
+            element={
+              <ProtectedRoute>
+                <MigrationPage />
               </ProtectedRoute>
             }
           />

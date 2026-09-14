@@ -5,12 +5,14 @@ import {
   type Customer,
 } from "../api/customers";
 import { getActiveCatalog, type Product } from "../api/products";
-import { createOrder } from "../api/orders";
+import { createOrder, updateOrder, type OrderItemPayload } from "../api/orders";
+import type { Order } from "../types/order";
 import Icon from "./Icons";
 import "./DashboardShell.css";
 import { formatMoney } from "../utils/format";
 
 interface Props {
+  order?: Order;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -54,8 +56,18 @@ const groupCatalog = (products: Product[]) => {
 const isWeightUom = (product: Product): boolean =>
   (product.unit || "").toLowerCase() === "kg";
 
-export default function CreateOrderModal({ onClose, onSuccess }: Props) {
-  const [items, setItems] = useState<OrderItemDraft[]>([createEmptyItem()]);
+export default function CreateOrderModal({ order, onClose, onSuccess }: Props) {
+  const [items, setItems] = useState<OrderItemDraft[]>(() =>
+    order?.items?.length
+      ? order.items.map((item) => ({
+          service: item.serviceType,
+          category: item.productType,
+          productId: item.productId ?? "",
+          quantity: String(item.quantity),
+          price: String(item.unitPrice),
+        }))
+      : [createEmptyItem()],
+  );
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [filtered, setFiltered] = useState<Customer[]>([]);
@@ -70,9 +82,12 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [catalog, setCatalog] = useState<Map<string, Map<string, Product[]>>>(new Map());
   const [loading, setLoading] = useState(false);
-  const [discount, setDiscount] = useState("");
+  const [discount, setDiscount] = useState(
+    order && order.discount > 0 ? String(order.discount) : "",
+  );
   const [deliveryDate, setDeliveryDate] = useState(
-    new Date().toISOString().split("T")[0],
+    order?.expectedDeliveryDate ??
+      new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
   );
 
   const serviceNames = useMemo(() => Array.from(catalog.keys()), [catalog]);
@@ -83,9 +98,45 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
     Promise.all([getActiveCatalog(), getCustomers()])
       .then(([catalogData, customersData]) => {
         if (!ignore) {
-          setCatalog(groupCatalog(catalogData));
+          const grouped = groupCatalog(catalogData);
+          setCatalog(grouped);
           setCustomers(customersData);
           setFiltered(customersData);
+
+          if (order) {
+            const allProducts = Array.from(grouped.values()).flatMap((cats) =>
+              Array.from(cats.values()).flat(),
+            );
+            setItems(
+              order.items?.length
+                ? order.items.map((item) => {
+                    const match = allProducts.find(
+                      (p) =>
+                        p.id === item.productId ||
+                        (p.name === item.productName &&
+                          p.service === item.serviceType &&
+                          p.category === item.productType),
+                    );
+                    return {
+                      service: match?.service ?? item.serviceType,
+                      category: match?.category ?? item.productType,
+                      productId: match?.id ?? item.productId ?? "",
+                      quantity: String(item.quantity),
+                      price: String(item.unitPrice),
+                    };
+                  })
+                : [createEmptyItem()],
+            );
+            const customer = customersData.find(
+              (c) => c.phone === order.customerPhone,
+            );
+            setSelectedCustomer(customer ?? null);
+            setSearch(
+              customer
+                ? `${customer.name} - ${customer.phone}`
+                : order.customerName ?? "",
+            );
+          }
         }
       })
       .catch((err) => {
@@ -95,7 +146,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [order]);
 
   const addItem = () => {
     setItems((current) => [...current, createEmptyItem()]);
@@ -167,7 +218,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!selectedCustomer) {
+    if (!order && !selectedCustomer) {
       alert("Please select a customer");
       return;
     }
@@ -193,9 +244,15 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
       );
       const productById = new Map(allProducts.map((p) => [p.id, p]));
 
-      await createOrder({
-        customerId: selectedCustomer.id,
-        phone: selectedCustomer.phone,
+      const payload: {
+        customerId?: string;
+        phone?: string;
+        items: OrderItemPayload[];
+        expected_delivery_date: string;
+        discount: number;
+      } = {
+        customerId: selectedCustomer?.id,
+        phone: selectedCustomer?.phone,
         items: items.map((item) => {
           const product = productById.get(item.productId)!;
           const qty = Number(item.quantity);
@@ -214,13 +271,19 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
         }),
         expected_delivery_date: deliveryDate,
         discount: discountNum,
-      });
+      };
+
+      if (order) {
+        await updateOrder(order.id, payload);
+      } else {
+        await createOrder(payload);
+      }
 
       onSuccess();
       onClose();
     } catch (err) {
       console.error(err);
-      alert("Failed to create order");
+      alert(order ? "Failed to update order" : "Failed to create order");
     } finally {
       setLoading(false);
     }
@@ -236,8 +299,12 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
       >
         <div className="modal-header">
           <div>
-            <h2 id="create-order-title">Create Order</h2>
-            <p>Service → Category → Product (rates are editable)</p>
+            <h2 id="create-order-title">{order ? "Edit Order" : "Create Order"}</h2>
+            <p>
+              {order
+                ? "Adjust items, rates, discount, and delivery date"
+                : "Service → Category → Product (rates are editable)"}
+            </p>
           </div>
           <button type="button" className="icon-button icon-only" onClick={onClose}>
             <Icon name="close" size={18} />
@@ -247,6 +314,14 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
         <div className="modal-body">
           <div className="form-field">
             <label>Customer</label>
+            {order ? (
+              <input
+                className="form-input"
+                value={search}
+                readOnly
+                aria-label="Customer"
+              />
+            ) : (
             <div className="customer-search">
               <input
                 placeholder="Search customer (name or phone)"
@@ -296,6 +371,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {showAddCustomer && (
@@ -552,7 +628,7 @@ export default function CreateOrderModal({ onClose, onSuccess }: Props) {
             disabled={loading}
             className="btn btn-primary"
           >
-            {loading ? "Creating..." : "Create Order"}
+            {loading ? "Saving..." : order ? "Save Changes" : "Create Order"}
           </button>
         </div>
       </section>

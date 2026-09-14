@@ -26,9 +26,10 @@ interface Props {
   order: Order;
   onClose: () => void;
   onUpdated: () => void;
+  onEdit?: (order: Order) => void;
 }
 
-export default function OrderDetailDrawer({ order, onClose, onUpdated }: Props) {
+export default function OrderDetailDrawer({ order, onClose, onUpdated, onEdit }: Props) {
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("CASH");
   const [saving, setSaving] = useState(false);
@@ -391,6 +392,17 @@ export default function OrderDetailDrawer({ order, onClose, onUpdated }: Props) 
         </div>
 
         <div className="drawer-footer">
+          {onEdit && order.status !== "CANCELLED" && (
+            <button
+              type="button"
+              className="icon-button"
+              onClick={() => onEdit(order)}
+            >
+              <Icon name="edit" size={16} />
+              Edit Order
+            </button>
+          )}
+
           <button
             type="button"
             className="icon-button"

@@ -77,6 +77,7 @@ const groups: NavGroup[] = [
 ];
 
 const settingsLink: NavItem = { to: "/settings", label: "Settings", icon: "settings" };
+const migrationLink: NavItem = { to: "/migration", label: "Data Migration", icon: "upload", adminOnly: true };
 
 const GROUP_OPEN_KEY = "clothncare.sidebar.groups";
 
@@ -214,6 +215,7 @@ export default function Sidebar() {
         ))}
 
         <span className="sidebar-section-label">System</span>
+        {admin && renderLink(migrationLink)}
         {renderLink(settingsLink)}
       </nav>
 

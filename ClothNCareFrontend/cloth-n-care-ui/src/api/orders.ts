@@ -40,6 +40,11 @@ export const createOrder = async (payload: CreateOrderPayload) => {
   return res.data.data;
 };
 
+export const updateOrder = async (id: string, payload: CreateOrderPayload) => {
+  const res = await api.put<{ data: Order }>(`/orders/${id}`, payload);
+  return res.data.data;
+};
+
 export const updateOrderStatus = async (id: string, status: string) => {
   const res = await api.put<{ data: Order }>(`/orders/${id}/status?status=${status}`);
   return res.data.data;

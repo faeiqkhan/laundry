@@ -2507,3 +2507,38 @@
     display: none !important;
   }
 }
+
+/* ============================================================
+   Migration page (Data Migration)
+   ============================================================ */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.flex-row {
+  display: flex;
+  align-items: center;
+}
+
+.message-list {
+  list-style: none;
+  padding: 8px 16px 16px;
+  margin: 0;
+  color: var(--slate-700);
+}
+
+.message-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--slate-100);
+  font-size: 13.5px;
+}
+
+.message-list li:last-child {
+  border-bottom: none;
+}
+
+.card-error {
+  border-color: var(--danger-100);
+}
