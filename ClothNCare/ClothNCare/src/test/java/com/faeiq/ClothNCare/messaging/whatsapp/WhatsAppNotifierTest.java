@@ -150,4 +150,76 @@ class WhatsAppNotifierTest {
 
         verify(messagingService, never()).submit(any());
     }
+
+    @Test
+    void thankYouIsNotSentWhenAutoThankYouDisabled() {
+        settings.setWhatsAppAutoThankYou(false);
+
+        Customer customer = new Customer();
+        customer.setId("c1");
+        customer.setPhone("9876543210");
+        Orders order = new Orders();
+        order.setId("o1");
+        order.setCustomer(customer);
+
+        notifier.notifyOrderThankYou(order);
+
+        verify(messagingService, never()).submit(any());
+    }
+
+    @Test
+    void thankYouUsesCustomTemplateWhenEnabled() {
+        settings.setWhatsAppAutoThankYou(true);
+        settings.setWhatsAppThankYouMessage(
+                "धन्यवाद {name}! आपला ऑर्डर {invoice} प्राप्त झाला आहे {business}");
+
+        Customer customer = new Customer();
+        customer.setId("c1");
+        customer.setName("Dev");
+        customer.setPhone("9876543210");
+        Orders order = new Orders();
+        order.setId("o1");
+        order.setCustomer(customer);
+        order.setInvoice_number("INV-2026-000002");
+        order.setStatus(Status.RECEIVED);
+
+        notifier.notifyOrderThankYou(order);
+
+        org.mockito.ArgumentCaptor<WhatsAppMessageRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(WhatsAppMessageRequest.class);
+        verify(messagingService).submit(captor.capture());
+        WhatsAppMessageRequest request = captor.getValue();
+        assertEquals("ORDER:o1:THANK_YOU", request.getBusinessKey());
+        assertEquals(WhatsAppMessageStatus.CAT_THANK_YOU, request.getCategory());
+        assertEquals("THANK_YOU", request.getMessageType());
+        assertTrue(request.getBody().contains("धन्यवाद Dev"));
+        assertTrue(request.getBody().contains("INV-2026-000002"));
+        assertTrue(request.getBody().contains("Test Laundry"));
+    }
+
+    @Test
+    void statusUsesCustomTemplateWhenConfigured() {
+        settings.setWhatsAppAutoStatus(true);
+        settings.setWhatsAppStatusMessage("आपल्या ऑर्डर {invoice} चा दर्जा: {status}");
+
+        Customer customer = new Customer();
+        customer.setId("c1");
+        customer.setName("Bob");
+        customer.setPhone("9876543210");
+        Orders order = new Orders();
+        order.setId("o1");
+        order.setCustomer(customer);
+        order.setInvoice_number("INV-2026-000001");
+        order.setStatus(Status.READY);
+
+        notifier.notifyStatusChanged(order, Status.WASHING);
+
+        org.mockito.ArgumentCaptor<WhatsAppMessageRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(WhatsAppMessageRequest.class);
+        verify(messagingService).submit(captor.capture());
+        WhatsAppMessageRequest request = captor.getValue();
+        assertTrue(request.getBody().contains("INV-2026-000001"));
+        assertTrue(request.getBody().contains("READY"));
+        assertEquals("ORDER:o1:READY", request.getBusinessKey());
+    }
 }

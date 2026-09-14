@@ -2,6 +2,7 @@ package com.faeiq.ClothNCare.settings.entity;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Column;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -35,7 +36,18 @@ public class AppSettings {
     private String whatsAppProvider = "webjs";
     private boolean whatsAppTestMode = true;
     private String whatsAppTestNumber = "";
-    private boolean whatsAppAutoWelcome = false;
-    private boolean whatsAppAutoInvoice = false;
-    private boolean whatsAppAutoStatus = false;
+    @Column(columnDefinition = "integer default 0")
+private boolean whatsAppAutoWelcome = false;
+@Column(columnDefinition = "integer default 0")
+private boolean whatsAppAutoInvoice = false;
+@Column(columnDefinition = "integer default 0")
+private boolean whatsAppAutoStatus = false;
+@Column(columnDefinition = "integer default 0")
+private boolean whatsAppAutoThankYou = false;
+@Column(columnDefinition = "text default ''")
+private String whatsAppThankYouMessage = "";
+@Column(columnDefinition = "text default ''")
+private String whatsAppWelcomeMessage = "";
+@Column(columnDefinition = "text default ''")
+private String whatsAppStatusMessage = "";
 }

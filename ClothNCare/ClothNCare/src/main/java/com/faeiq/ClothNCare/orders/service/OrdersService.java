@@ -10,6 +10,7 @@ import com.faeiq.ClothNCare.messaging.whatsapp.WhatsAppNotifier;
 import com.faeiq.ClothNCare.orders.dto.OrderDTO;
 import com.faeiq.ClothNCare.orders.dto.OrderItemResponseDTO;
 import com.faeiq.ClothNCare.orders.dto.OrderItemsDTO;
+import com.faeiq.ClothNCare.orders.dto.OrderOverviewDTO;
 import com.faeiq.ClothNCare.orders.dto.OrderResponseDTO;
 import com.faeiq.ClothNCare.orders.dto.PaymentRequestDTO;
 import com.faeiq.ClothNCare.orders.dto.PaymentResponseDTO;
@@ -25,7 +26,12 @@ import com.faeiq.ClothNCare.product.repository.ProductRepository;
 import com.faeiq.ClothNCare.settings.service.SettingsService;
 import com.faeiq.ClothNCare.user.entity.Users;
 import com.faeiq.ClothNCare.user.repository.UsersRepository;
+import jakarta.persistence.criteria.Expression;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -90,6 +96,7 @@ public class OrdersService {
         Orders savedOrder = ordersRepository.save(order);
         String invoiceUrl = invoiceService.generateInvoice(savedOrder.getId()).getInvoiceUrl();
 
+        whatsAppNotifier.notifyOrderThankYou(savedOrder);
         whatsAppNotifier.notifyOrderCreated(savedOrder);
 
         return toResponse(savedOrder, invoiceUrl);
@@ -283,6 +290,64 @@ public class OrdersService {
         return ordersRepository.findAll().stream()
                 .map(order -> toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId())))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderResponseDTO> getOrderPage(Pageable pageable, String status, String payment, String q) {
+        return ordersRepository.findAll(buildOrderFilter(status, payment, q), pageable)
+                .map(order -> toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId())));
+    }
+
+    @Transactional(readOnly = true)
+    public OrderOverviewDTO getOverview() {
+        return new OrderOverviewDTO(
+                ordersRepository.count(),
+                ordersRepository.countActive(),
+                ordersRepository.countWithOutstanding()
+        );
+    }
+
+    private Specification<Orders> buildOrderFilter(String status, String payment, String q) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (status != null && !status.isBlank()) {
+                try {
+                    predicates.add(cb.equal(root.get("status"), Status.valueOf(status.trim().toUpperCase())));
+                } catch (IllegalArgumentException ignore) {
+                    // Ignore invalid status filter
+                }
+            }
+
+            if (payment != null && !payment.isBlank()) {
+                Expression<BigDecimal> total = cb.coalesce(root.get("total_price"), BigDecimal.ZERO);
+                Expression<BigDecimal> paid = cb.coalesce(root.get("paid_amount"), BigDecimal.ZERO);
+                switch (payment.trim().toUpperCase()) {
+                    case "PAID" -> predicates.add(cb.and(
+                            cb.greaterThan(total, BigDecimal.ZERO),
+                            cb.greaterThanOrEqualTo(paid, total)));
+                    case "PARTIAL" -> predicates.add(cb.and(
+                            cb.greaterThan(paid, BigDecimal.ZERO),
+                            cb.lessThan(paid, total)));
+                    case "UNPAID" -> predicates.add(cb.and(
+                            cb.equal(paid, BigDecimal.ZERO),
+                            cb.greaterThan(total, BigDecimal.ZERO)));
+                    default -> { }
+                }
+            }
+
+            if (q != null && !q.isBlank()) {
+                String term = "%" + q.trim().toLowerCase() + "%";
+                predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("customer").get("name")), term),
+                        cb.like(root.get("customer").get("phone"), term),
+                        cb.like(cb.lower(root.get("id")), term),
+                        cb.like(cb.lower(root.get("invoice_number")), term)
+                ));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
     }
 
     @Transactional(readOnly = true)

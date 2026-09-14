@@ -4,6 +4,7 @@ import com.faeiq.ClothNCare.customer.entity.Customer;
 import com.faeiq.ClothNCare.user.entity.Users;
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -30,9 +31,11 @@ public class Orders {
     private Status status= Status.RECEIVED;
 
     @OneToMany(mappedBy = "orders", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 100)
     private List<OrdersItems> items;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    @BatchSize(size = 100)
     private List<Payment> payments;
 
     private BigDecimal total_price;

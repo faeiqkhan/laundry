@@ -16,6 +16,7 @@ public final class WhatsAppMessageStatus {
     public static final String SKIPPED = "SKIPPED";
 
     public static final String CAT_WELCOME = "WELCOME";
+    public static final String CAT_THANK_YOU = "THANK_YOU";
     public static final String CAT_INVOICE = "INVOICE";
     public static final String CAT_STATUS = "STATUS";
     public static final String CAT_MANUAL = "MANUAL";

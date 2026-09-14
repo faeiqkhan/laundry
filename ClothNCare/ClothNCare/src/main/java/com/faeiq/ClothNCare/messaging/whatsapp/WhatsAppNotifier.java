@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Builds customer-facing notification messages and feeds them to the
@@ -28,6 +29,18 @@ public class WhatsAppNotifier {
     private static final String TYPE_CUSTOMER_CREATED = "CUSTOMER_CREATED";
     private static final String TYPE_ORDER_CREATED = "ORDER_CREATED";
     private static final String TYPE_STATUS_CHANGED = "STATUS_CHANGED";
+    private static final String TYPE_THANK_YOU = "THANK_YOU";
+
+    private static final String DEFAULT_WELCOME =
+            "Hi {name},\n\nWelcome to {business}!\n"
+                    + "You have been added as a customer. You can now place orders and "
+                    + "you will receive updates on your phone as your order progresses.\n\n"
+                    + "Thank you for choosing {business}.";
+
+    private static final String DEFAULT_THANK_YOU =
+            "Hi {name},\n\nThank you for choosing {business}. "
+                    + "Your order {invoice} has been received and is expected by {delivery}.\n\n"
+                    + "- {business}";
 
     private final WhatsAppMessagingService messagingService;
     private final SettingsService settingsService;
@@ -37,16 +50,38 @@ public class WhatsAppNotifier {
         if (!settings.isWhatsAppAutoWelcome() || customer == null || isBlank(customer.getPhone())) {
             return;
         }
-        String body = "Hi " + safe(customer.getName()) + ",\n\n"
-                + "Welcome to " + businessName(settings) + "!\n"
-                + "You have been added as a customer. You can now place orders and "
-                + "you will receive updates on your phone as your order progresses.\n\n"
-                + "Thank you for choosing " + businessName(settings) + ".";
+        String template = isBlank(settings.getWhatsAppWelcomeMessage())
+                ? DEFAULT_WELCOME : settings.getWhatsAppWelcomeMessage();
+        String body = renderMessage(template, Map.of(
+                "name", safe(customer.getName()),
+                "business", businessName(settings)));
         WhatsAppMessageRequest request = request(customer, WhatsAppMessageStatus.CAT_WELCOME,
                 customer.getPhone(), body, settings.getWhatsAppWelcomeTemplate(),
                 List.of(safe(customer.getName())));
         request.setMessageType(TYPE_CUSTOMER_CREATED);
         request.setBusinessKey("CUSTOMER:" + customer.getId());
+        messagingService.submit(request);
+    }
+
+    public void notifyOrderThankYou(Orders order) {
+        AppSettings settings = settingsService.getSettings();
+        if (!settings.isWhatsAppAutoThankYou()
+                || order == null || order.getCustomer() == null || isBlank(order.getCustomer().getPhone())) {
+            return;
+        }
+        String template = isBlank(settings.getWhatsAppThankYouMessage())
+                ? DEFAULT_THANK_YOU : settings.getWhatsAppThankYouMessage();
+        String body = renderMessage(template, Map.of(
+                "name", safe(order.getCustomer().getName()),
+                "business", businessName(settings),
+                "invoice", safe(order.getInvoice_number()),
+                "delivery", order.getExpected_delivery_date() != null
+                        ? order.getExpected_delivery_date().format(DATE_FMT) : "-"));
+        WhatsAppMessageRequest request = request(order, WhatsAppMessageStatus.CAT_THANK_YOU,
+                order.getCustomer().getPhone(), body, "",
+                List.of());
+        request.setMessageType(TYPE_THANK_YOU);
+        request.setBusinessKey("ORDER:" + order.getId() + ":THANK_YOU");
         messagingService.submit(request);
     }
 
@@ -80,6 +115,27 @@ public class WhatsAppNotifier {
             return;
         }
         StringBuilder body = new StringBuilder();
+        if (!isBlank(settings.getWhatsAppStatusMessage())) {
+            body.append(renderMessage(settings.getWhatsAppStatusMessage(), Map.of(
+                    "name", safe(order.getCustomer().getName()),
+                    "business", businessName(settings),
+                    "invoice", safe(order.getInvoice_number()),
+                    "status", order.getStatus().name(),
+                    "message", statusLine(order.getStatus()),
+                    "delivery", order.getStatus() == Status.READY && order.getExpected_delivery_date() != null
+                            ? order.getExpected_delivery_date().format(DATE_FMT) : "-")));
+            String fullBody = body.toString();
+            WhatsAppMessageRequest request = request(order, WhatsAppMessageStatus.CAT_STATUS,
+                    order.getCustomer().getPhone(), fullBody, settings.getWhatsAppStatusTemplate(),
+                    List.of(
+                            safe(order.getCustomer().getName()),
+                            safe(order.getInvoice_number()),
+                            order.getStatus().name()));
+            request.setMessageType(TYPE_STATUS_CHANGED);
+            request.setBusinessKey("ORDER:" + order.getId() + ":" + order.getStatus());
+            messagingService.submit(request);
+            return;
+        }
         body.append("Hi ").append(safe(order.getCustomer().getName())).append(",\n\n");
         body.append("Update on your order ").append(safe(order.getInvoice_number())).append(":\n");
         body.append(statusLine(order.getStatus())).append("\n\n");
@@ -180,6 +236,17 @@ public class WhatsAppNotifier {
             case DELIVERED -> "Your order has been delivered. Thank you!";
             case CANCELLED -> "Your order has been cancelled.";
         };
+    }
+
+    private String renderMessage(String template, Map<String, String> variables) {
+        if (isBlank(template)) {
+            return "";
+        }
+        String text = template;
+        for (Map.Entry<String, String> entry : variables.entrySet()) {
+            text = text.replace("{" + entry.getKey() + "}", safe(entry.getValue()));
+        }
+        return text;
     }
 
     private String businessName(AppSettings settings) {

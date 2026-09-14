@@ -18,6 +18,7 @@ import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
+import com.lowagie.text.pdf.BaseFont;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.awt.Color;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
@@ -50,6 +52,41 @@ public class InvoiceService {
     private static final Font NORMAL_FONT = FontFactory.getFont(FontFactory.COURIER, 9f, Font.NORMAL, Color.BLACK);
     private static final Font SMALL_FONT = FontFactory.getFont(FontFactory.COURIER, 8f, Font.NORMAL, Color.BLACK);
     private static final Font BIG_FONT = FontFactory.getFont(FontFactory.COURIER, 12f, Font.BOLD, Color.BLACK);
+
+    private static volatile BaseFont devanagariBaseFont;
+
+    private static BaseFont devanagariBaseFont() {
+        BaseFont font = devanagariBaseFont;
+        if (font != null) {
+            return font;
+        }
+        try (InputStream is = InvoiceService.class.getResourceAsStream("/fonts/NotoSansDevanagari-Regular.ttf")) {
+            if (is == null) {
+                return null;
+            }
+            byte[] data = is.readAllBytes();
+            font = BaseFont.createFont("NotoSansDevanagari-Regular.ttf", BaseFont.IDENTITY_H, BaseFont.EMBEDDED, false, data, null);
+        } catch (Exception e) {
+            font = null;
+        }
+        devanagariBaseFont = font;
+        return font;
+    }
+
+    private static boolean hasDevanagari(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        return text.chars().anyMatch(codePoint -> codePoint > 0xFF);
+    }
+
+    private static Font fontFor(String text, float size, int style) {
+        BaseFont devanagari = devanagariBaseFont();
+        if (devanagari != null && hasDevanagari(text)) {
+            return new Font(devanagari, size, style);
+        }
+        return FontFactory.getFont(FontFactory.COURIER, size, style, Color.BLACK);
+    }
 
     private final OrdersRepository ordersRepository;
     private final SettingsService settingsService;
@@ -87,22 +124,22 @@ public class InvoiceService {
         String businessName = settings.getBusinessName() == null || settings.getBusinessName().isBlank()
                 ? "Cloth n Care" : settings.getBusinessName();
 
-        Paragraph name = new Paragraph(businessName, BRAND_FONT);
+        Paragraph name = new Paragraph(businessName, fontFor(businessName, 16f, Font.BOLD));
         name.setAlignment(Element.ALIGN_CENTER);
         name.setSpacingAfter(2);
         document.add(name);
 
         if (settings.getTagline() != null && !settings.getTagline().isBlank()) {
-            addCentered(document, settings.getTagline(), TAGLINE_FONT);
+            addCentered(document, settings.getTagline(), fontFor(settings.getTagline(), 8f, Font.BOLD));
         }
         if (settings.getAddress() != null && !settings.getAddress().isBlank()) {
-            addCentered(document, settings.getAddress(), NORMAL_FONT);
+            addCentered(document, settings.getAddress(), fontFor(settings.getAddress(), 9f, Font.NORMAL));
         }
         if (settings.getPhone() != null && !settings.getPhone().isBlank()) {
-            addCentered(document, "Ph: " + settings.getPhone(), NORMAL_FONT);
+            addCentered(document, "Ph: " + settings.getPhone(), fontFor("Ph: " + settings.getPhone(), 9f, Font.NORMAL));
         }
         if (settings.getEmail() != null && !settings.getEmail().isBlank()) {
-            addCentered(document, settings.getEmail(), NORMAL_FONT);
+            addCentered(document, settings.getEmail(), fontFor(settings.getEmail(), 9f, Font.NORMAL));
         }
 
         addDivider(document);
@@ -119,16 +156,16 @@ public class InvoiceService {
         addDivider(document);
 
         if (order.getCustomer() != null) {
-            addLine(document, order.getCustomer().getName(), BOLD_FONT);
+            addLine(document, order.getCustomer().getName(), fontFor(order.getCustomer().getName(), 9f, Font.BOLD));
             if (order.getCustomer().getAddress() != null && !order.getCustomer().getAddress().isBlank()) {
-                addLine(document, order.getCustomer().getAddress(), NORMAL_FONT);
+                addLine(document, order.getCustomer().getAddress(), fontFor(order.getCustomer().getAddress(), 9f, Font.NORMAL));
             }
             if (order.getCustomer().getPhone() != null && !order.getCustomer().getPhone().isBlank()) {
-                addLine(document, "Mobile : " + order.getCustomer().getPhone(), NORMAL_FONT);
+                addLine(document, "Mobile : " + order.getCustomer().getPhone(), fontFor("Mobile : " + order.getCustomer().getPhone(), 9f, Font.NORMAL));
             }
         }
         if (order.getCreatedBy() != null) {
-            addLine(document, "Created By : " + order.getCreatedBy().getName(), NORMAL_FONT);
+            addLine(document, "Created By : " + order.getCreatedBy().getName(), fontFor("Created By : " + order.getCreatedBy().getName(), 9f, Font.NORMAL));
         }
 
         addDivider(document);
@@ -193,7 +230,7 @@ public class InvoiceService {
             document.add(heading);
             for (String line : settings.getTermsAndConditions().split("\n")) {
                 if (!line.isBlank()) {
-                    addLine(document, line.trim(), SMALL_FONT);
+                    addLine(document, line.trim(), fontFor(line.trim(), 8f, Font.NORMAL));
                 }
             }
         }
@@ -245,7 +282,9 @@ public class InvoiceService {
     }
 
     private void addTotalRow(Document document, String label, String value, boolean emphasize) {
-        Paragraph row = new Paragraph(label + " :   " + value, emphasize ? BIG_FONT : NORMAL_FONT);
+        float size = emphasize ? BIG_FONT.getSize() : NORMAL_FONT.getSize();
+        int style = emphasize ? BIG_FONT.getStyle() : NORMAL_FONT.getStyle();
+        Paragraph row = new Paragraph(label + " :   " + value, fontFor(label + " :   " + value, size, style));
         row.setAlignment(Element.ALIGN_RIGHT);
         row.setSpacingBefore(emphasize ? 3 : 0);
         row.setSpacingAfter(3);
@@ -266,7 +305,7 @@ public class InvoiceService {
     }
 
     private void addItemCell(PdfPTable table, String text, int alignment, boolean header) {
-        PdfPCell cell = new PdfPCell(new Phrase(text, header ? BOLD_FONT : NORMAL_FONT));
+        PdfPCell cell = new PdfPCell(new Phrase(text, header ? BOLD_FONT : fontFor(text, 9f, Font.NORMAL)));
         cell.setBorder(Rectangle.BOTTOM);
         cell.setBorderWidth(0.4f);
         cell.setPadding(3);

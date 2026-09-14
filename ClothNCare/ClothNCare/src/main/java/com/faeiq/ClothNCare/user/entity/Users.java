@@ -2,9 +2,11 @@ package com.faeiq.ClothNCare.user.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
+import org.hibernate.annotations.BatchSize;
 
 @Entity
 @Data
+@BatchSize(size = 100)
 public class Users {
 
     @Id

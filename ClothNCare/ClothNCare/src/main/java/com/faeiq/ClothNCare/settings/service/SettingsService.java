@@ -64,6 +64,15 @@ public class SettingsService {
         if (dto.getWhatsAppAutoStatus() != null) {
             settings.setWhatsAppAutoStatus(dto.getWhatsAppAutoStatus());
         }
+        if (dto.getWhatsAppAutoThankYou() != null) {
+            settings.setWhatsAppAutoThankYou(dto.getWhatsAppAutoThankYou());
+        }
+        settings.setWhatsAppThankYouMessage(dto.getWhatsAppThankYouMessage() == null
+                ? settings.getWhatsAppThankYouMessage() : dto.getWhatsAppThankYouMessage());
+        settings.setWhatsAppWelcomeMessage(dto.getWhatsAppWelcomeMessage() == null
+                ? settings.getWhatsAppWelcomeMessage() : dto.getWhatsAppWelcomeMessage());
+        settings.setWhatsAppStatusMessage(dto.getWhatsAppStatusMessage() == null
+                ? settings.getWhatsAppStatusMessage() : dto.getWhatsAppStatusMessage());
         return settingsRepository.save(settings);
     }
 

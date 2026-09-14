@@ -11,12 +11,17 @@ import com.faeiq.ClothNCare.customer.repository.CustomerRepository;
 import com.faeiq.ClothNCare.messaging.whatsapp.WhatsAppNotifier;
 import com.faeiq.ClothNCare.orders.entity.Orders;
 import com.faeiq.ClothNCare.orders.repository.OrdersRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -61,6 +66,26 @@ public class CustomerService {
         return customerRepository.findAll().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CustomerResponseDTO> getCustomerPage(Pageable pageable, String q) {
+        return customerRepository.findAll(buildCustomerFilter(q), pageable)
+                .map(this::toResponse);
+    }
+
+    private Specification<Customer> buildCustomerFilter(String q) {
+        return (root, query, cb) -> {
+            if (q == null || q.isBlank()) {
+                return cb.conjunction();
+            }
+            String term = "%" + q.trim().toLowerCase() + "%";
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.like(cb.lower(root.get("name")), term));
+            predicates.add(cb.like(root.get("phone"), term));
+            predicates.add(cb.like(cb.lower(root.get("email")), term));
+            return cb.or(predicates.toArray(new Predicate[0]));
+        };
     }
 
     @Transactional(readOnly = true)

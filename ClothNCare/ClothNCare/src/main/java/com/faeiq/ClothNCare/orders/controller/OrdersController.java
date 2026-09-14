@@ -2,12 +2,17 @@ package com.faeiq.ClothNCare.orders.controller;
 
 import com.faeiq.ClothNCare.common.ApiResponse;
 import com.faeiq.ClothNCare.common.ApiResponseUtil;
+import com.faeiq.ClothNCare.common.dto.PageResponse;
 import com.faeiq.ClothNCare.orders.dto.OrderDTO;
+import com.faeiq.ClothNCare.orders.dto.OrderOverviewDTO;
 import com.faeiq.ClothNCare.orders.dto.OrderResponseDTO;
 import com.faeiq.ClothNCare.orders.dto.PaymentRequestDTO;
 import com.faeiq.ClothNCare.orders.entity.Status;
 import com.faeiq.ClothNCare.orders.service.OrdersService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +32,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OrdersController {
 
+    private static final int DEFAULT_PAGE_SIZE = 10;
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final OrdersService ordersService;
 
     @PostMapping
@@ -36,9 +44,44 @@ public class OrdersController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<OrderResponseDTO>>> getAllOrders() {
-        List<OrderResponseDTO> orders = ordersService.getAllOrders();
-        return ResponseEntity.ok(ApiResponseUtil.success(orders, "Orders fetched successfully"));
+    public ResponseEntity<ApiResponse<Object>> getAllOrders(
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size,
+            @RequestParam(required = false, defaultValue = "created_at,desc") String sort,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String payment,
+            @RequestParam(required = false) String q) {
+
+        if (page == null && size == null) {
+            List<OrderResponseDTO> orders = ordersService.getAllOrders();
+            return ResponseEntity.ok(ApiResponseUtil.success(orders, "Orders fetched successfully"));
+        }
+
+        int pageNumber = page == null ? 0 : Math.max(page, 0);
+        int pageSize = size == null ? DEFAULT_PAGE_SIZE : Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        Page<OrderResponseDTO> result = ordersService.getOrderPage(
+                PageRequest.of(pageNumber, pageSize, parseSort(sort)),
+                status,
+                payment,
+                q);
+        return ResponseEntity.ok(ApiResponseUtil.success(PageResponse.of(result), "Orders fetched successfully"));
+    }
+
+    @GetMapping("/overview")
+    public ResponseEntity<ApiResponse<OrderOverviewDTO>> getOverview() {
+        OrderOverviewDTO overview = ordersService.getOverview();
+        return ResponseEntity.ok(ApiResponseUtil.success(overview, "Overview fetched successfully"));
+    }
+
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "created_at");
+        }
+        String[] parts = sort.split(",");
+        String field = parts[0].trim();
+        Sort.Direction direction = parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim())
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        return Sort.by(direction, field);
     }
 
     @GetMapping("/{id}")
