@@ -3,9 +3,13 @@ package com.faeiq.ClothNCare.migration;
 import com.faeiq.ClothNCare.migration.dto.SwashDryRunReport;
 import com.faeiq.ClothNCare.migration.service.SwashMigrationService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Assumptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,6 +17,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Smoke test that runs the dry-run against the real Swash exports shipped in
  * the repository (swash-data/). It only reads, never imports.
+ * <p>
+ * swash-data/ holds client business data and is git-ignored, so on CI the
+ * directory is absent and the test is skipped instead of failed.
  */
 @SpringBootTest
 @TestPropertySource(properties = {
@@ -26,6 +33,9 @@ class SwashMigrationDryRunIntegrationTest {
 
     @Test
     void dryRunMatchesKnownFactsFromSwashExports() {
+        Assumptions.assumeTrue(Files.isDirectory(Path.of("../../swash-data")),
+                "swash-data/ not present; skipping dry-run smoke test");
+
         SwashDryRunReport report = migrationService.dryRunFromDefaultDirectory();
 
         SwashDryRunReport.Counts counts = report.getCounts();
