@@ -57,8 +57,8 @@ public class InvoiceService {
     private static final Font BRAND_FONT = FontFactory.getFont(FontFactory.COURIER, 16f, Font.BOLD, Color.BLACK);
     private static final Font TAGLINE_FONT = FontFactory.getFont(FontFactory.COURIER, 8f, Font.BOLD, Color.BLACK);
     private static final Font BOLD_FONT = FontFactory.getFont(FontFactory.COURIER, 9f, Font.BOLD, Color.BLACK);
-    private static final Font NORMAL_FONT = FontFactory.getFont(FontFactory.COURIER, 9f, Font.NORMAL, Color.BLACK);
-    private static final Font SMALL_FONT = FontFactory.getFont(FontFactory.COURIER, 8f, Font.NORMAL, Color.BLACK);
+    private static final Font NORMAL_FONT = FontFactory.getFont(FontFactory.COURIER, 10f, Font.BOLD, Color.BLACK);
+    private static final Font SMALL_FONT = FontFactory.getFont(FontFactory.COURIER, 10f, Font.BOLD, Color.BLACK);
     private static final Font BIG_FONT = FontFactory.getFont(FontFactory.COURIER, 12f, Font.BOLD, Color.BLACK);
 
     private static volatile BaseFont devanagariBaseFont;
@@ -91,9 +91,9 @@ public class InvoiceService {
     private static Font fontFor(String text, float size, int style) {
         BaseFont devanagari = devanagariBaseFont();
         if (devanagari != null && hasDevanagari(text)) {
-            return new Font(devanagari, size, style);
+            return new Font(devanagari, size, Font.BOLD);
         }
-        return FontFactory.getFont(FontFactory.COURIER, size, style, Color.BLACK);
+        return FontFactory.getFont(FontFactory.COURIER, size, Font.BOLD, Color.BLACK);
     }
 
     private final OrdersRepository ordersRepository;
@@ -138,23 +138,27 @@ public class InvoiceService {
         document.add(name);
 
         if (settings.getTagline() != null && !settings.getTagline().isBlank()) {
-            addCentered(document, settings.getTagline(), fontFor(settings.getTagline(), 8f, Font.BOLD));
+            addCentered(document, settings.getTagline(), fontFor(settings.getTagline(), 9f, Font.BOLD));
         }
         if (settings.getAddress() != null && !settings.getAddress().isBlank()) {
-            addCentered(document, settings.getAddress(), fontFor(settings.getAddress(), 9f, Font.NORMAL));
+            addCentered(document, settings.getAddress(), fontFor(settings.getAddress(), 10f, Font.BOLD));
         }
         if (settings.getPhone() != null && !settings.getPhone().isBlank()) {
-            addCentered(document, "Ph: " + settings.getPhone(), fontFor("Ph: " + settings.getPhone(), 9f, Font.NORMAL));
+            addCentered(document, "Ph: " + settings.getPhone(), fontFor("Ph: " + settings.getPhone(), 10f, Font.BOLD));
         }
         if (settings.getEmail() != null && !settings.getEmail().isBlank()) {
-            addCentered(document, settings.getEmail(), fontFor(settings.getEmail(), 9f, Font.NORMAL));
+            addCentered(document, settings.getEmail(), fontFor(settings.getEmail(), 10f, Font.BOLD));
         }
 
         addDivider(document);
     }
 
     private void buildMetaAndBillTo(Document document, Orders order) {
-        addMetaRow(document, "Invoice No", order.getInvoice_number() == null ? "N/A" : order.getInvoice_number());
+        String invoiceDisplay = order.getInvoice_number();
+        if (invoiceDisplay != null) {
+            invoiceDisplay = invoiceDisplay.replaceFirst("(?i)inv[-_]?", "").trim();
+        }
+        addMetaRow(document, "Invoice No", invoiceDisplay == null ? "N/A" : invoiceDisplay);
         if (order.getCreated_at() != null) {
             addMetaRow(document, "Date", order.getCreated_at().format(DATE_TIME_FMT));
         }
@@ -164,16 +168,16 @@ public class InvoiceService {
         addDivider(document);
 
         if (order.getCustomer() != null) {
-            addLine(document, order.getCustomer().getName(), fontFor(order.getCustomer().getName(), 9f, Font.BOLD));
+            addLine(document, order.getCustomer().getName(), fontFor(order.getCustomer().getName(), 10f, Font.BOLD));
             if (order.getCustomer().getAddress() != null && !order.getCustomer().getAddress().isBlank()) {
-                addLine(document, order.getCustomer().getAddress(), fontFor(order.getCustomer().getAddress(), 9f, Font.NORMAL));
+                addLine(document, order.getCustomer().getAddress(), fontFor(order.getCustomer().getAddress(), 10f, Font.BOLD));
             }
             if (order.getCustomer().getPhone() != null && !order.getCustomer().getPhone().isBlank()) {
-                addLine(document, "Mobile : " + order.getCustomer().getPhone(), fontFor("Mobile : " + order.getCustomer().getPhone(), 9f, Font.NORMAL));
+                addLine(document, "Mobile : " + order.getCustomer().getPhone(), fontFor("Mobile : " + order.getCustomer().getPhone(), 10f, Font.BOLD));
             }
         }
         if (order.getCreatedBy() != null) {
-            addLine(document, "Created By : " + order.getCreatedBy().getName(), fontFor("Created By : " + order.getCreatedBy().getName(), 9f, Font.NORMAL));
+            addLine(document, "Created By : " + order.getCreatedBy().getName(), fontFor("Created By : " + order.getCreatedBy().getName(), 10f, Font.BOLD));
         }
 
         addDivider(document);
@@ -296,7 +300,7 @@ public class InvoiceService {
     }
 
     private void addMetaRow(Document document, String label, String value) {
-        Paragraph paragraph = new Paragraph(label + " : " + value, NORMAL_FONT);
+        Paragraph paragraph = new Paragraph(label + " : " + value, fontFor(label + " : " + value, 10f, Font.BOLD));
         paragraph.setSpacingAfter(2);
         document.add(paragraph);
     }

@@ -287,7 +287,9 @@ public class OrdersService {
 
     @Transactional(readOnly = true)
     public List<OrderResponseDTO> getAllOrders() {
-        return ordersRepository.findAll().stream()
+        return ordersRepository.findAll(org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Direction.DESC, "created_at"
+        )).stream()
                 .map(order -> toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId())))
                 .toList();
     }
