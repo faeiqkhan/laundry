@@ -1,0 +1,1 @@
+var e=[`RECEIVED`,`PROCESSING`,`WASHING`,`DRYING`,`IRONING`,`FOLDED`,`READY`,`DELIVERED`,`CANCELLED`],t=[`CASH`,`CARD`,`UPI`,`BANK_TRANSFER`,`OTHER`],n={CASH:`Cash`,CARD:`Card`,UPI:`UPI`,BANK_TRANSFER:`Bank Transfer`,OTHER:`Other`};export{t as n,n as r,e as t};
