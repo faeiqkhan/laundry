@@ -8,6 +8,7 @@ export interface LoginResponse {
   message: string;
   data: {
     token: string;
+    refreshToken: string;
     role?: string;
   };
 }

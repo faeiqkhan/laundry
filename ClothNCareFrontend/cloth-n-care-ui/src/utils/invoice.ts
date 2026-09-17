@@ -82,7 +82,12 @@ export const printOrderTag = (order: {
   customerPhone?: string;
   createdByName?: string;
   expectedDeliveryDate?: string;
-  items?: { id: string; serviceType: string; productType: string }[];
+  items?: {
+    id: string;
+    productName?: string;
+    serviceType: string;
+    productType: string;
+  }[];
 }) => {
   const printWindow = window.open("", "_blank", "width=460,height=680");
   if (!printWindow) {
@@ -90,15 +95,15 @@ export const printOrderTag = (order: {
     return;
   }
 
-  const invoiceNo = order.invoiceNumber || order.id.slice(0, 6);
-  const customer = order.customerName || order.customerPhone || "-";
+  const invoiceNo = formatTagInvoiceNumber(order.invoiceNumber, order.id);
+  const customer = order.customerName || "-";
   const delivery = formatTagDate(order.expectedDeliveryDate);
 
   const rows =
     order.items && order.items.length > 0
       ? order.items.map((item, index) => ({
           service: item.serviceType,
-          garment: item.productType,
+          garment: item.productName || item.productType,
           count: `${index + 1} / ${order.items!.length}`,
         }))
       : [{ service: "Dry Cleaning", garment: "Garment", count: "1 / 1" }];
@@ -143,14 +148,16 @@ export const printOrderTag = (order: {
             page-break-after: always;
             break-after: page;
           }
+          .tag:not(:last-child) { border-bottom: 1px dashed #000000; }
           .tag:last-child { page-break-after: auto; break-after: auto; }
-          .brand { font-size: 15px; font-weight: 800; letter-spacing: 0.4px; white-space: nowrap; }
-          .service { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; }
-          .garment { font-size: 13px; font-weight: 700; }
-          .invoice { font-size: 26px; font-weight: 800; letter-spacing: 0.6px; line-height: 1.05; }
-          .customer { font-size: 11px; font-weight: 700; }
-          .delivery { font-size: 10px; font-weight: 700; }
-          .count { font-size: 12px; font-weight: 800; }
+          .brand, .service, .garment, .invoice, .customer, .delivery, .count {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0;
+            line-height: 1.1;
+          }
+          .brand { white-space: nowrap; }
+          .delivery { white-space: nowrap; }
           @page { size: 40mm 70mm; margin: 0; }
         </style>
       </head>
@@ -178,6 +185,14 @@ const formatTagDate = (value?: string): string => {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+};
+
+const formatTagInvoiceNumber = (value: string | undefined, orderId: string): string => {
+  const invoiceNumber = value?.trim() || orderId.slice(0, 6);
+  const suffix = invoiceNumber.includes("-")
+    ? invoiceNumber.slice(invoiceNumber.lastIndexOf("-") + 1)
+    : invoiceNumber;
+  return suffix.replace(/^0+(?=\d)/, "");
 };
 
 const escapeHtml = (value: string): string =>

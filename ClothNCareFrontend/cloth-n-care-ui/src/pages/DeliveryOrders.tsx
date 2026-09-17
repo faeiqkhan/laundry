@@ -3,13 +3,23 @@ import { getOrders, updateOrderStatus } from "../api/orders";
 import DashboardLayout from "../layout/DashboardLayout";
 import Icon from "../components/Icons";
 import StatusBadge from "../components/StatusBadge";
-import type { Order } from "../types/order";
+import { ORDER_STATUSES, type Order } from "../types/order";
 import { formatMoney, formatDate, todayISO } from "../utils/format";
+
+const deliveryStatuses = ORDER_STATUSES.filter(
+  (status) => status !== "DELIVERED" && status !== "CANCELLED",
+);
 
 export default function DeliveryOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [paymentFilter, setPaymentFilter] = useState("ALL");
+  const [deliveryFilter, setDeliveryFilter] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const fetchOrders = async () => {
     const data = await getOrders();
@@ -35,12 +45,43 @@ export default function DeliveryOrdersPage() {
 
   const deliveries = useMemo(() => {
     const today = todayISO();
+    const term = search.trim().toLowerCase();
+
     return orders
       .filter(
         (order) =>
           order.status !== "DELIVERED" && order.status !== "CANCELLED",
       )
       .filter((order) => order.expectedDeliveryDate)
+      .filter((order) => {
+        if (statusFilter !== "ALL" && order.status !== statusFilter) {
+          return false;
+        }
+        if (paymentFilter !== "ALL" && order.paymentStatus !== paymentFilter) {
+          return false;
+        }
+        if (dateFrom && order.expectedDeliveryDate < dateFrom) return false;
+        if (dateTo && order.expectedDeliveryDate > dateTo) return false;
+        if (term) {
+          const searchable = [
+            order.invoiceNumber,
+            order.customerName,
+            order.customerPhone,
+            order.id,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          if (!searchable.includes(term)) return false;
+        }
+
+        const overdue = order.expectedDeliveryDate < today;
+        const dueToday = order.expectedDeliveryDate === today;
+        if (deliveryFilter === "OVERDUE" && !overdue) return false;
+        if (deliveryFilter === "TODAY" && !dueToday) return false;
+        if (deliveryFilter === "UPCOMING" && (overdue || dueToday)) return false;
+        return true;
+      })
       .sort((a, b) =>
         a.expectedDeliveryDate.localeCompare(b.expectedDeliveryDate),
       )
@@ -49,7 +90,7 @@ export default function DeliveryOrdersPage() {
         overdue: order.expectedDeliveryDate < today,
         dueToday: order.expectedDeliveryDate === today,
       }));
-  }, [orders]);
+  }, [orders, search, statusFilter, paymentFilter, deliveryFilter, dateFrom, dateTo]);
 
   const deliveredCount = orders.filter(
     (order) => order.status === "DELIVERED",
@@ -94,6 +135,90 @@ export default function DeliveryOrdersPage() {
             {deliveredCount} delivered
           </p>
         </div>
+      </div>
+
+      <div className="toolbar">
+        <div className="search-box">
+          <Icon name="search" size={18} className="search-icon" />
+          <input
+            type="search"
+            placeholder="Search invoice, customer, phone..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            aria-label="Search delivery orders"
+          />
+        </div>
+
+        <select
+          className="filter-select"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          aria-label="Filter by order status"
+        >
+          <option value="ALL">All statuses</option>
+          {deliveryStatuses.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="filter-select"
+          value={paymentFilter}
+          onChange={(event) => setPaymentFilter(event.target.value)}
+          aria-label="Filter by payment status"
+        >
+          <option value="ALL">All payments</option>
+          <option value="PAID">Paid</option>
+          <option value="PARTIAL">Partial</option>
+          <option value="UNPAID">Unpaid</option>
+        </select>
+
+        <select
+          className="filter-select"
+          value={deliveryFilter}
+          onChange={(event) => setDeliveryFilter(event.target.value)}
+          aria-label="Filter by delivery timing"
+        >
+          <option value="ALL">All delivery dates</option>
+          <option value="OVERDUE">Overdue</option>
+          <option value="TODAY">Due today</option>
+          <option value="UPCOMING">Upcoming</option>
+        </select>
+
+        <input
+          className="form-input"
+          type="date"
+          value={dateFrom}
+          onChange={(event) => setDateFrom(event.target.value)}
+          aria-label="Delivery date from"
+        />
+        <input
+          className="form-input"
+          type="date"
+          value={dateTo}
+          onChange={(event) => setDateTo(event.target.value)}
+          aria-label="Delivery date to"
+        />
+
+        {(search || statusFilter !== "ALL" || paymentFilter !== "ALL" ||
+          deliveryFilter !== "ALL" || dateFrom || dateTo) && (
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("ALL");
+              setPaymentFilter("ALL");
+              setDeliveryFilter("ALL");
+              setDateFrom("");
+              setDateTo("");
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className="table-card">

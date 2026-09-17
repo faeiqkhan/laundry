@@ -1,0 +1,1 @@
+import{t as e}from"./axios-BLYAAJtI.js";var t=async(t,n)=>{let r=new URLSearchParams;return t&&r.set(`from`,t),n&&r.set(`to`,n),(await e.get(`/payments${r.toString()?`?${r.toString()}`:``}`)).data.data},n=async t=>(await e.delete(`/payments/${t}`)).data.data;export{t as n,n as t};

@@ -67,7 +67,13 @@ export default function OrdersPage() {
       .then((data) => {
         if (ignore) return;
         setLoadError(null);
-        setRows(data.content);
+        const sortedContent = [...data.content].sort((a, b) => {
+          const aInv = (a.invoiceNumber ?? "").toString().toLowerCase().startsWith("inv");
+          const bInv = (b.invoiceNumber ?? "").toString().toLowerCase().startsWith("inv");
+          if (aInv !== bInv) return aInv ? -1 : 1;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        setRows(sortedContent);
         setTotalPages(data.totalPages);
         setTotalElements(data.totalElements);
         setSelected((current) =>

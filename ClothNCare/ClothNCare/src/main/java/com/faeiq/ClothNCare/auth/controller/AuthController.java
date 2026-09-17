@@ -4,6 +4,7 @@ import com.faeiq.ClothNCare.auth.dto.AuthResponseDTO;
 import com.faeiq.ClothNCare.auth.dto.HealthStatusDTO;
 import com.faeiq.ClothNCare.auth.dto.LoginDTO;
 import com.faeiq.ClothNCare.auth.dto.RegisterDTO;
+import com.faeiq.ClothNCare.auth.dto.RefreshRequestDTO;
 import com.faeiq.ClothNCare.auth.service.AuthService;
 import com.faeiq.ClothNCare.common.ApiResponse;
 import com.faeiq.ClothNCare.common.ApiResponseUtil;
@@ -26,6 +27,18 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponseDTO>> login(@RequestBody LoginDTO loginDTO) {
         AuthResponseDTO response = authService.login(loginDTO);
         return ResponseEntity.ok(ApiResponseUtil.success(response, "Login successful"));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> refresh(@RequestBody RefreshRequestDTO request) {
+        AuthResponseDTO response = authService.refresh(request.getRefreshToken());
+        return ResponseEntity.ok(ApiResponseUtil.success(response, "Token refreshed"));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestBody RefreshRequestDTO request) {
+        authService.logout(request.getRefreshToken());
+        return ResponseEntity.ok(ApiResponseUtil.success(null, "Logged out"));
     }
 
     @PostMapping("/register")

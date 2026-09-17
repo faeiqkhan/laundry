@@ -24,6 +24,21 @@ const tomorrowISO = (): string => {
   return date.toISOString().split("T")[0];
 };
 
+const SERVICE_ORDER = [
+  "dry cleaning",
+  "steam iron",
+  "laundry services",
+  "household",
+  "woolen laundry",
+  "others",
+  "shoes dc",
+];
+
+const serviceOrderIndex = (serviceName: string): number => {
+  const index = SERVICE_ORDER.indexOf(serviceName.trim().toLowerCase());
+  return index === -1 ? SERVICE_ORDER.length : index;
+};
+
 const groupCatalog = (products: Product[]) => {
   const services = new Map<string, Map<string, Product[]>>();
   for (const product of products) {
@@ -41,7 +56,15 @@ const groupCatalog = (products: Product[]) => {
     }
     list.push(product);
   }
-  return services;
+  return new Map(
+    [...services.entries()].sort(([serviceA], [serviceB]) => {
+      const orderDifference =
+        serviceOrderIndex(serviceA) - serviceOrderIndex(serviceB);
+      return orderDifference !== 0
+        ? orderDifference
+        : serviceA.localeCompare(serviceB);
+    }),
+  );
 };
 
 const isWeightUom = (product: Product): boolean =>
@@ -54,6 +77,8 @@ export default function PosOrderPage() {
   const [catalog, setCatalog] = useState<Map<string, Map<string, Product[]>>>(new Map());
   const [settings, setSettings] = useState<Settings | null>(null);
   const [customerId, setCustomerId] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [service, setService] = useState("");
@@ -106,6 +131,16 @@ export default function PosOrderPage() {
     formatMoney(value, currencySymbol);
 
   const serviceNames = useMemo(() => Array.from(catalog.keys()), [catalog]);
+
+  const filteredCustomers = useMemo(() => {
+    const term = customerSearch.trim().toLowerCase();
+    if (!term) return customers;
+    return customers.filter((customer) =>
+      [customer.name, customer.phone, customer.email].some((value) =>
+        value?.toLowerCase().includes(term),
+      ),
+    );
+  }, [customers, customerSearch]);
 
   const categoryNames = useMemo(() => {
     if (!service) return [];
@@ -438,24 +473,51 @@ export default function PosOrderPage() {
 
       <div className="pos-order-bar">
         <div className="form-field pos-order-field pos-order-customer">
-          <label htmlFor="pos-customer">Customer</label>
-          <select
-            id="pos-customer"
-            className="select-slim"
-            value={customerId}
-            onChange={(event) => {
-              setCustomerId(event.target.value);
-              setError("");
-            }}
-          >
-            <option value="">New customer...</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-                {customer.phone ? ` · ${customer.phone}` : ""}
-              </option>
-            ))}
-          </select>
+          <label htmlFor="pos-customer-search">Customer</label>
+          <div className="customer-search">
+            <input
+              id="pos-customer-search"
+              type="search"
+              className="select-slim"
+              placeholder="Search customer..."
+              value={customerSearch}
+              onChange={(event) => {
+                setCustomerSearch(event.target.value);
+                setCustomerId("");
+                setShowCustomerDropdown(true);
+                setError("");
+              }}
+              onFocus={() => setShowCustomerDropdown(true)}
+              aria-label="Search customer by name, phone, or email"
+            />
+            {showCustomerDropdown && filteredCustomers.length > 0 && (
+              <div className="customer-dropdown">
+                {filteredCustomers.map((customer) => (
+                  <button
+                    key={customer.id}
+                    type="button"
+                    className="customer-option"
+                    onClick={() => {
+                      setCustomerId(customer.id);
+                      setCustomerSearch(
+                        `${customer.name}${customer.phone ? ` - ${customer.phone}` : ""}`,
+                      );
+                      setShowCustomerDropdown(false);
+                      setError("");
+                    }}
+                  >
+                    {customer.name}
+                    {customer.phone ? ` - ${customer.phone}` : ""}
+                  </button>
+                ))}
+              </div>
+            )}
+            {showCustomerDropdown && customerSearch.trim() && filteredCustomers.length === 0 && (
+              <div className="customer-dropdown no-results-dropdown">
+                <p className="no-results-text">No customer found</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {!customerId && (

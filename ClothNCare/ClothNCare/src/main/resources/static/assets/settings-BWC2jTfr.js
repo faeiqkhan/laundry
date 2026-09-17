@@ -1,0 +1,1 @@
+import{t as e}from"./axios-BLYAAJtI.js";var t=async()=>(await e.get(`/settings`)).data.data,n=async t=>(await e.put(`/settings`,t)).data.data,r=async t=>{let n=new FormData;return n.append(`file`,t),(await e.post(`/settings/store-signature`,n)).data.data};export{n,r,t};

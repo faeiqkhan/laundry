@@ -31,6 +31,7 @@ import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -42,6 +43,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -285,14 +287,51 @@ public class OrdersService {
         return toResponse(saved, invoiceService.getAvailableInvoiceUrl(saved.getId()));
     }
 
+    // @Transactional(readOnly = true)
+    // public List<OrderResponseDTO> getAllOrders() {
+    //     return ordersRepository.findAll().stream()
+    //             .map(order -> toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId())))
+    //             .toList();
+    // }
+
+
     @Transactional(readOnly = true)
     public List<OrderResponseDTO> getAllOrders() {
-        return ordersRepository.findAll(org.springframework.data.domain.Sort.by(
-                org.springframework.data.domain.Sort.Direction.DESC, "created_at"
-        )).stream()
-                .map(order -> toResponse(order, invoiceService.getAvailableInvoiceUrl(order.getId())))
+        return ordersRepository.findAll().stream()
+                .sorted(
+                        Comparator.<Orders, Boolean>comparing(
+                                order -> isNewInvoiceFormat(order.getInvoice_number())
+                        ).reversed()
+                        .thenComparing(
+                                order -> extractInvoiceNumber(order.getInvoice_number()),
+                                Comparator.reverseOrder()
+                        )
+                )
+                .map(order -> toResponse(
+                        order,
+                        invoiceService.getAvailableInvoiceUrl(order.getId())
+                ))
                 .toList();
     }
+
+    private boolean isNewInvoiceFormat(String invoiceNumber) {
+        return invoiceNumber != null && invoiceNumber.startsWith("INV-");
+    }
+
+    private Long extractInvoiceNumber(String invoiceNumber) {
+        if (invoiceNumber == null || invoiceNumber.isBlank()) {
+            return 0L;
+        }
+
+        if (invoiceNumber.startsWith("INV-")) {
+            return Long.parseLong(
+                    invoiceNumber.substring(invoiceNumber.lastIndexOf('-') + 1)
+            );
+        }
+
+        return Long.parseLong(invoiceNumber);
+    }
+
 
     @Transactional(readOnly = true)
     public Page<OrderResponseDTO> getOrderPage(Pageable pageable, String status, String payment, String q) {

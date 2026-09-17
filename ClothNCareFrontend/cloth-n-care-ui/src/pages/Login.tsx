@@ -21,8 +21,10 @@ export default function Login() {
 
       const res = await api.post<LoginResponse>("/auth/login", payload);
       const token = res.data.data.token;
+      const refreshToken = res.data.data.refreshToken;
 
       localStorage.setItem("token", token);
+      localStorage.setItem("refreshToken", refreshToken);
 
       const parts = token.split(".");
       if (parts.length === 3) {

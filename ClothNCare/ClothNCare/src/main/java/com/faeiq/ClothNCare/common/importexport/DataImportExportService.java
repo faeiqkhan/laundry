@@ -234,52 +234,186 @@ public class DataImportExportService {
         return new DataTable(headers, rows);
     }
 
-    private DataTable workshopTable() {
-        List<String> headers = List.of(
-                "Sr No", "Invoice No", "Customer Name", "Invoice Date", "Delivery Date",
-                "Product", "Service", "Qty", "Item Amount", "Discount", "Tax", "Total Amount", "Status");
-        List<List<String>> rows = new ArrayList<>();
-        List<Orders> orders = ordersRepository.findAll().stream()
-                .filter(o -> o.getStatus() != null && o.getStatus() != Status.CANCELLED)
-                .sorted(Comparator.comparing(Orders::getCreated_at, Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList();
-        int srNo = 0;
-        BigDecimal grandTotal = BigDecimal.ZERO;
-        for (Orders order : orders) {
-            if (order.getItems() == null || order.getItems().isEmpty()) {
-                continue;
-            }
-            int itemCount = order.getItems().size();
-            for (int i = 0; i < itemCount; i++) {
-                OrdersItems item = order.getItems().get(i);
-                boolean lastRow = i == itemCount - 1;
-                BigDecimal invoiceTotal = null;
-                if (lastRow) {
-                    invoiceTotal = order.getTotal_price() == null ? BigDecimal.ZERO : order.getTotal_price();
-                    grandTotal = grandTotal.add(invoiceTotal);
-                }
-                String product = item.getProduct_name() != null && !item.getProduct_name().isEmpty()
-                        ? item.getProduct_name()
-                        : item.getProduct_type() == null ? "" : item.getProduct_type();
-                rows.add(List.of(
-                        String.valueOf(++srNo),
-                        nullToEmpty(order.getInvoice_number()),
-                        order.getCustomer() != null ? nullToEmpty(order.getCustomer().getName()) : "",
-                        order.getCreated_at() == null ? "" : order.getCreated_at().format(DATETIME_ISO),
-                        order.getExpected_delivery_date() == null ? "" : order.getExpected_delivery_date().format(DATE_ISO),
-                        product,
-                        nullToEmpty(item.getService_type()),
-                        fmt(item.getQuantity()) + (item.getUom() == null || item.getUom().isEmpty() ? "" : " " + item.getUom()),
-                        fmt(item.getPrice() == null ? null : item.getPrice().multiply(item.getQuantity() == null ? BigDecimal.ONE : item.getQuantity())),
-                        fmt(order.getDiscount()),
-                        fmt(order.getTax_amount()),
-                        invoiceTotal == null ? "" : fmt(invoiceTotal),
-                        order.getStatus() == null ? "" : order.getStatus().name()));
-            }
+    // private DataTable workshopTable() {
+    //     List<String> headers = List.of(
+    //             "Sr No", "Invoice No", "Customer Name", "Invoice Date", "Delivery Date",
+    //             "Product", "Service", "Qty", "Item Amount", "Discount", "Tax", "Total Amount", "Status");
+    //     List<List<String>> rows = new ArrayList<>();
+    //     List<Orders> orders = ordersRepository.findAll().stream()
+    //             .filter(o -> o.getStatus() != null && o.getStatus() != Status.CANCELLED)
+    //             .sorted(Comparator.comparing(Orders::getCreated_at, Comparator.nullsLast(Comparator.naturalOrder())))
+    //             .toList();
+    //     int srNo = 0;
+    //     BigDecimal grandTotal = BigDecimal.ZERO;
+    //     for (Orders order : orders) {
+    //         if (order.getItems() == null || order.getItems().isEmpty()) {
+    //             continue;
+    //         }
+    //         int itemCount = order.getItems().size();
+    //         for (int i = 0; i < itemCount; i++) {
+    //             OrdersItems item = order.getItems().get(i);
+    //             boolean lastRow = i == itemCount - 1;
+    //             BigDecimal invoiceTotal = null;
+    //             if (lastRow) {
+    //                 invoiceTotal = order.getTotal_price() == null ? BigDecimal.ZERO : order.getTotal_price();
+    //                 grandTotal = grandTotal.add(invoiceTotal);
+    //             }
+    //             String product = item.getProduct_name() != null && !item.getProduct_name().isEmpty()
+    //                     ? item.getProduct_name()
+    //                     : item.getProduct_type() == null ? "" : item.getProduct_type();
+    //             rows.add(List.of(
+    //                     String.valueOf(++srNo),
+    //                     nullToEmpty(order.getInvoice_number()),
+    //                     order.getCustomer() != null ? nullToEmpty(order.getCustomer().getName()) : "",
+    //                     order.getCreated_at() == null ? "" : order.getCreated_at().format(DATETIME_ISO),
+    //                     order.getExpected_delivery_date() == null ? "" : order.getExpected_delivery_date().format(DATE_ISO),
+    //                     product,
+    //                     nullToEmpty(item.getService_type()),
+    //                     fmt(item.getQuantity()) + (item.getUom() == null || item.getUom().isEmpty() ? "" : " " + item.getUom()),
+    //                     fmt(item.getPrice() == null ? null : item.getPrice().multiply(item.getQuantity() == null ? BigDecimal.ONE : item.getQuantity())),
+    //                     fmt(order.getDiscount()),
+    //                     fmt(order.getTax_amount()),
+    //                     invoiceTotal == null ? "" : fmt(invoiceTotal),
+    //                     order.getStatus() == null ? "" : order.getStatus().name()));
+    //         }
+    //     }
+    //     rows.add(List.of("", "", "", "", "", "Grand Total", "", "", "", "", "", fmt(grandTotal), ""));
+    //     return new DataTable(headers, rows);
+    // }
+
+    // private DataTable paymentsTable() {
+    //     List<String> headers = List.of("Id", "Invoice No", "Amount", "Method", "Paid At", "Recorded By Email");
+    //     List<List<String>> rows = new ArrayList<>();
+    //     paymentRepository.findAll().stream()
+    //             .sorted(Comparator.comparing(Payment::getPaidAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+    //             .forEach(p -> rows.add(List.of(
+    //                     nullToEmpty(p.getId()),
+    //                     p.getOrder() != null ? nullToEmpty(p.getOrder().getInvoice_number()) : "",
+    //                     fmt(p.getAmount()),
+    //                     p.getMethod() == null ? "" : p.getMethod().name(),
+    //                     p.getPaidAt() == null ? "" : p.getPaidAt().format(DATETIME_ISO),
+    //                     p.getRecordedBy() != null ? nullToEmpty(p.getRecordedBy().getEmail()) : "")));
+    //     return new DataTable(headers, rows);
+    // }
+
+   private DataTable workshopTable() {
+    List<String> headers = List.of(
+            "Sr No", "Invoice No", "Customer Name", "Customer Number",
+            "Invoice Date", "Delivery Date", "Product", "Service",
+            "Qty", "Item Amount", "Discount", "Tax", "Total Amount", "Status"
+    );
+
+    List<List<String>> rows = new ArrayList<>();
+
+    List<Orders> orders = ordersRepository.findAll().stream()
+            .filter(o -> o.getStatus() != null && o.getStatus() != Status.CANCELLED)
+            .sorted(
+                    Comparator.<Orders, Boolean>comparing(
+                            o -> isNewInvoiceFormat(o.getInvoice_number())
+                    ).reversed()
+                    .thenComparing(
+                            o -> extractInvoiceNumber(o.getInvoice_number()),
+                            Comparator.reverseOrder()
+                    )
+            )
+            .toList();
+
+    int srNo = 0;
+    BigDecimal grandTotal = BigDecimal.ZERO;
+
+    for (Orders order : orders) {
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            continue;
         }
-        rows.add(List.of("", "", "", "", "", "Grand Total", "", "", "", "", "", fmt(grandTotal), ""));
-        return new DataTable(headers, rows);
+
+        int itemCount = order.getItems().size();
+
+        for (int i = 0; i < itemCount; i++) {
+            OrdersItems item = order.getItems().get(i);
+            boolean lastRow = i == itemCount - 1;
+
+            BigDecimal invoiceTotal = null;
+
+            if (lastRow) {
+                invoiceTotal = order.getTotal_price() == null
+                        ? BigDecimal.ZERO
+                        : order.getTotal_price();
+
+                grandTotal = grandTotal.add(invoiceTotal);
+            }
+
+            String product = item.getProduct_name() != null
+                    && !item.getProduct_name().isEmpty()
+                    ? item.getProduct_name()
+                    : item.getProduct_type() == null
+                            ? ""
+                            : item.getProduct_type();
+
+            String customerNumber = order.getCustomer() != null
+                    ? nullToEmpty(order.getCustomer().getPhone())
+                    : "";
+
+            rows.add(List.of(
+                    String.valueOf(++srNo),
+                    nullToEmpty(order.getInvoice_number()),
+                    order.getCustomer() != null
+                            ? nullToEmpty(order.getCustomer().getName())
+                            : "",
+                    customerNumber,
+                    order.getCreated_at() == null
+                            ? ""
+                            : order.getCreated_at().format(DATETIME_ISO),
+                    order.getExpected_delivery_date() == null
+                            ? ""
+                            : order.getExpected_delivery_date().format(DATE_ISO),
+                    product,
+                    nullToEmpty(item.getService_type()),
+                    fmt(item.getQuantity())
+                            + (item.getUom() == null || item.getUom().isEmpty()
+                                    ? ""
+                                    : " " + item.getUom()),
+                    fmt(item.getPrice() == null
+                            ? null
+                            : item.getPrice().multiply(
+                                    item.getQuantity() == null
+                                            ? BigDecimal.ONE
+                                            : item.getQuantity())),
+                    fmt(order.getDiscount()),
+                    fmt(order.getTax_amount()),
+                    invoiceTotal == null ? "" : fmt(invoiceTotal),
+                    order.getStatus() == null
+                            ? ""
+                            : order.getStatus().name()
+            ));
+        }
     }
+
+    // 14 columns, matching the 14 headers
+    rows.add(List.of(
+            "", "", "", "", "", "Grand Total",
+            "", "", "", "", "", "", fmt(grandTotal), ""
+    ));
+
+    return new DataTable(headers, rows);
+}
+
+private boolean isNewInvoiceFormat(String invoiceNumber) {
+    return invoiceNumber != null && invoiceNumber.startsWith("INV-");
+}
+
+private Long extractInvoiceNumber(String invoiceNumber) {
+    if (invoiceNumber == null || invoiceNumber.isBlank()) {
+        return 0L;
+    }
+
+    if (invoiceNumber.startsWith("INV-")) {
+        return Long.parseLong(
+                invoiceNumber.substring(invoiceNumber.lastIndexOf('-') + 1)
+        );
+    }
+
+    return Long.parseLong(invoiceNumber);
+}
 
     private DataTable paymentsTable() {
         List<String> headers = List.of("Id", "Invoice No", "Amount", "Method", "Paid At", "Recorded By Email");

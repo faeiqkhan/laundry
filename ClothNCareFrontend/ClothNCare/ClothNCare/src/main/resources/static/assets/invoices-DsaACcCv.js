@@ -1,1 +1,0 @@
-import{t as e}from"./axios-BQWIQ4uc.js";var t=async t=>(await e.post(`/invoice/${t}`)).data.data,n=async t=>(await e.delete(`/invoice/${t}`)).data.data;export{t as n,n as t};

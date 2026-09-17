@@ -91,7 +91,7 @@ public class InvoiceService {
     private static Font fontFor(String text, float size, int style) {
         BaseFont devanagari = devanagariBaseFont();
         if (devanagari != null && hasDevanagari(text)) {
-            return new Font(devanagari, size, Font.BOLD);
+            return new Font(devanagari, size, Font.NORMAL, Color.BLACK);
         }
         return FontFactory.getFont(FontFactory.COURIER, size, Font.BOLD, Color.BLACK);
     }

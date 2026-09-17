@@ -32,8 +32,9 @@ const MigrationPage = lazy(() => import("./pages/Migration"));
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const token = localStorage.getItem("token");
+  const refreshToken = localStorage.getItem("refreshToken");
 
-  if (!token) {
+  if (!token && !refreshToken) {
     return <Navigate to="/" replace />;
   }
 

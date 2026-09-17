@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getOrders } from "../../api/orders";
 import { downloadExport } from "../../api/dataIO";
-import StatusBadge from "../../components/StatusBadge";
 import type { Order, OrderItem } from "../../types/order";
 import { formatDate, formatMoney, formatMoneyShort } from "../../utils/format";
 
@@ -10,6 +9,7 @@ interface WorkshopRow {
   orderId: string;
   srNo: number;
   customerName: string;
+  customerPhone: string;
   invoiceDate: string;
   deliveryDate: string;
   invoiceNo: string;
@@ -21,7 +21,6 @@ interface WorkshopRow {
   uom: string;
   itemAmount: number;
   totalAmount: number | null;
-  status: string;
 }
 
 function buildRows(orders: Order[]): WorkshopRow[] {
@@ -45,6 +44,7 @@ function buildRows(orders: Order[]): WorkshopRow[] {
         orderId: order.id,
         srNo: srNo++,
         customerName: order.customerName ?? "-",
+        customerPhone: order.customerPhone ?? "-",
         invoiceDate: order.createdAt ?? "",
         deliveryDate: order.expectedDeliveryDate ?? "",
         invoiceNo: order.invoiceNumber ?? order.id.slice(0, 8),
@@ -56,7 +56,6 @@ function buildRows(orders: Order[]): WorkshopRow[] {
         uom: item.uom ?? "",
         itemAmount: item.lineTotal ?? 0,
         totalAmount: isLast ? (order.totalPrice ?? 0) : null,
-        status: order.status,
       });
     });
   }
@@ -71,6 +70,7 @@ function downloadCsv(rows: WorkshopRow[]): void {
     "Customer Name",
     "Invoice Date",
     "Delivery Date",
+    "Customer Number",
     "Product",
     "Service",
     "Qty",
@@ -78,7 +78,6 @@ function downloadCsv(rows: WorkshopRow[]): void {
     "Discount",
     "Tax",
     "Total Amount",
-    "Status",
   ];
   const escape = (value: string): string => {
     if (/[",\n]/.test(value)) {
@@ -95,6 +94,7 @@ function downloadCsv(rows: WorkshopRow[]): void {
         escape(row.customerName),
         escape(row.invoiceDate ? formatDate(row.invoiceDate) : ""),
         escape(row.deliveryDate ? formatDate(row.deliveryDate) : ""),
+        escape(row.customerPhone),
         escape(row.product),
         escape(row.service),
         `${row.qty}${row.uom ? ` ${row.uom}` : ""}`,
@@ -102,7 +102,6 @@ function downloadCsv(rows: WorkshopRow[]): void {
         formatMoney(row.discount),
         formatMoney(row.tax),
         row.totalAmount === null ? "" : formatMoney(row.totalAmount),
-        escape(row.status),
       ].join(","),
     ),
   ].join("\n");
@@ -248,6 +247,7 @@ export default function WorkshopHistoryReport() {
               <th>Sr No</th>
               <th>Invoice No</th>
               <th>Customer Name</th>
+              <th>Customer Number</th>
               <th>Invoice Date</th>
               <th>Delivery Date</th>
               <th>Product</th>
@@ -257,7 +257,6 @@ export default function WorkshopHistoryReport() {
               <th className="num">Discount</th>
               <th className="num">Tax</th>
               <th className="num">Total Amount</th>
-              <th>Status</th>
             </tr>
           </thead>
           {rows.length === 0 ? (
@@ -276,6 +275,7 @@ export default function WorkshopHistoryReport() {
                     <td>{row.srNo}</td>
                     <td style={{ fontWeight: 700 }}>{row.invoiceNo}</td>
                     <td>{row.customerName}</td>
+                    <td>{row.customerPhone}</td>
                     <td>{formatDate(row.invoiceDate)}</td>
                     <td>{formatDate(row.deliveryDate)}</td>
                     <td>{row.product}</td>
@@ -294,9 +294,6 @@ export default function WorkshopHistoryReport() {
                         <strong>{formatMoney(row.totalAmount)}</strong>
                       )}
                     </td>
-                    <td>
-                      <StatusBadge status={row.status} />
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -305,13 +302,12 @@ export default function WorkshopHistoryReport() {
           {rows.length > 0 && (
             <tfoot>
               <tr>
-                <td colSpan={11} style={{ textAlign: "right" }}>
+                <td colSpan={12} style={{ textAlign: "right" }}>
                   <strong>Grand Total</strong>
                 </td>
                 <td className="num">
                   <strong>{formatMoney(grandTotal)}</strong>
                 </td>
-                <td />
               </tr>
             </tfoot>
           )}

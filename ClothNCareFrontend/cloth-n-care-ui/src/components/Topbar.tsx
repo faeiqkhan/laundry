@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import "./DashboardShell.css";
 import Icon from "./Icons";
+import api from "../api/axios";
 import { getLanUrl } from "../utils/network";
 
 interface TokenClaims {
@@ -66,10 +67,20 @@ export default function Topbar({
 
   const title = pageTitles[location.pathname] ?? "Cloth & Care";
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    window.location.href = "/";
+  const handleLogout = async () => {
+    const refreshToken = localStorage.getItem("refreshToken");
+    try {
+      if (refreshToken) {
+        await api.post("/auth/logout", { refreshToken });
+      }
+    } catch {
+      // Clear local credentials even if the server is unavailable.
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("refreshToken");
+      localStorage.removeItem("role");
+      window.location.href = "/";
+    }
   };
 
   return (
