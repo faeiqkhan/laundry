@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import CreateOrderModal from "../components/CreateOrderModal";
 import OrderDetailDrawer from "../components/OrderDetailDrawer";
 import StatusBadge from "../components/StatusBadge";
@@ -23,6 +24,7 @@ const sortOptions = [
 ];
 
 export default function OrdersPage() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<Order[]>([]);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -35,7 +37,6 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [showModal, setShowModal] = useState(false);
   const [editOrder, setEditOrder] = useState<Order | null>(null);
   const [selected, setSelected] = useState<Order | null>(null);
   const [search, setSearch] = useState("");
@@ -151,7 +152,7 @@ export default function OrdersPage() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => setShowModal(true)}
+            onClick={() => navigate("/pos")}
           >
             <Icon name="plus" size={16} />
             Create Order
@@ -365,13 +366,6 @@ export default function OrdersPage() {
           onPageChange={setPage}
         />
       </div>
-
-      {showModal && (
-        <CreateOrderModal
-          onClose={() => setShowModal(false)}
-          onSuccess={reload}
-        />
-      )}
 
       {selected && (
         <OrderDetailDrawer

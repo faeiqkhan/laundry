@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCustomers, createCustomer, type Customer } from "../api/customers";
-import { getActiveCatalog, type Product } from "../api/products";
+import { createProduct, getActiveCatalog, type Product } from "../api/products";
 import { createOrder, recordPayment } from "../api/orders";
 import { getSettings, type Settings } from "../api/settings";
 import DashboardLayout from "../layout/DashboardLayout";
@@ -83,6 +83,8 @@ export default function PosOrderPage() {
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [service, setService] = useState("");
   const [category, setCategory] = useState("");
+  const [customService, setCustomService] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState("");
@@ -93,6 +95,15 @@ export default function PosOrderPage() {
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState<PaymentMethod>("CASH");
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [creatingProduct, setCreatingProduct] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    name: "",
+    service: "",
+    category: "",
+    unit: "Nos",
+    price: "",
+  });
 
   useEffect(() => {
     let ignore = false;
@@ -132,6 +143,9 @@ export default function PosOrderPage() {
 
   const serviceNames = useMemo(() => Array.from(catalog.keys()), [catalog]);
 
+  const selectedService = service === "__custom__" ? customService.trim() : service;
+  const selectedCategory = category === "__custom__" ? customCategory.trim() : category;
+
   const filteredCustomers = useMemo(() => {
     const term = customerSearch.trim().toLowerCase();
     if (!term) return customers;
@@ -143,12 +157,12 @@ export default function PosOrderPage() {
   }, [customers, customerSearch]);
 
   const categoryNames = useMemo(() => {
-    if (!service) return [];
-    return Array.from(catalog.get(service)?.keys() ?? []);
-  }, [catalog, service]);
+    if (!selectedService) return [];
+    return Array.from(catalog.get(selectedService)?.keys() ?? []);
+  }, [catalog, selectedService]);
 
   const visibleProducts = useMemo(() => {
-    let list = catalog.get(service)?.get(category) ?? [];
+    let list = catalog.get(selectedService)?.get(selectedCategory) ?? [];
     const term = productSearch.trim().toLowerCase();
     if (term) {
       list = list.filter((product) =>
@@ -156,7 +170,67 @@ export default function PosOrderPage() {
       );
     }
     return list;
-  }, [catalog, service, category, productSearch]);
+  }, [catalog, selectedService, selectedCategory, productSearch]);
+
+  const handleCreateProduct = async () => {
+    const serviceName = newProduct.service.trim() || selectedService;
+    const categoryName = newProduct.category.trim() || selectedCategory;
+    const price = Number(newProduct.price);
+
+    if (!newProduct.name.trim() || !serviceName || !categoryName) {
+      setError("Enter a product name, service, and category");
+      return;
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      setError("Enter a valid product price");
+      return;
+    }
+
+    try {
+      setCreatingProduct(true);
+      setError("");
+      const createdProduct = await createProduct({
+        name: newProduct.name.trim(),
+        service: serviceName,
+        category: categoryName,
+        unit: newProduct.unit.trim() || "Nos",
+        price,
+        active: true,
+      });
+      const refreshed = await getActiveCatalog();
+      const grouped = groupCatalog(refreshed);
+      setCatalog(grouped);
+      setService(serviceName);
+      setCategory(categoryName);
+      setProductSearch("");
+      setCart((current) => {
+        const existing = current.find((item) => item.product.id === createdProduct.id);
+        if (existing) {
+          return current.map((item) =>
+            item.product.id === createdProduct.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item,
+          );
+        }
+        return [
+          ...current,
+          {
+            key: uid(),
+            product: createdProduct,
+            quantity: isWeightUom(createdProduct) ? 0.5 : 1,
+            unitPrice: String(createdProduct.price),
+          },
+        ];
+      });
+      setNewProduct({ name: "", service: "", category: "", unit: "Nos", price: "" });
+      setShowAddProduct(false);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to create product");
+    } finally {
+      setCreatingProduct(false);
+    }
+  };
 
   const resolvedPrice = (item: CartItem): number => {
     const num = Number(item.unitPrice);
@@ -570,6 +644,7 @@ export default function PosOrderPage() {
                   }`}
                   onClick={() => {
                     setService(serviceName);
+                    setCustomService("");
                     setCategory(
                       catalog.get(serviceName)?.keys().next().value as string,
                     );
@@ -583,7 +658,27 @@ export default function PosOrderPage() {
                   </span>
                 </button>
               ))}
+              <button
+                type="button"
+                className={`service-chip ${service === "__custom__" ? "service-chip-active" : ""}`}
+                onClick={() => {
+                  setService("__custom__");
+                  setCategory("__custom__");
+                  setProductSearch("");
+                }}
+              >
+                <Icon name="plus" size={15} />
+                Custom service
+              </button>
             </div>
+            {service === "__custom__" && (
+              <input
+                className="form-input"
+                placeholder="Enter service name"
+                value={customService}
+                onChange={(event) => setCustomService(event.target.value)}
+              />
+            )}
           </div>
 
           <div className="pos-catalog-filters">
@@ -597,13 +692,32 @@ export default function PosOrderPage() {
                   }`}
                   onClick={() => {
                     setCategory(categoryName);
+                    setCustomCategory("");
                     setProductSearch("");
                   }}
                 >
                   {categoryName}
                 </button>
               ))}
+              <button
+                type="button"
+                className={`category-pill ${category === "__custom__" ? "category-pill-active" : ""}`}
+                onClick={() => {
+                  setCategory("__custom__");
+                  setProductSearch("");
+                }}
+              >
+                + Custom category
+              </button>
             </div>
+            {category === "__custom__" && (
+              <input
+                className="form-input"
+                placeholder="Enter category name"
+                value={customCategory}
+                onChange={(event) => setCustomCategory(event.target.value)}
+              />
+            )}
 
             <div className="search-box" style={{ maxWidth: 260 }}>
               <Icon name="search" size={16} className="search-icon" />
@@ -621,6 +735,23 @@ export default function PosOrderPage() {
               <div className="table-empty">
                 <Icon name="shirt" size={32} className="table-empty-icon" />
                 <div>No products in this category</div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setNewProduct({
+                      name: productSearch.trim(),
+                      service: selectedService,
+                      category: selectedCategory,
+                      unit: "Nos",
+                      price: "",
+                    });
+                    setShowAddProduct(true);
+                  }}
+                >
+                  <Icon name="plus" size={14} />
+                  Add product
+                </button>
               </div>
             ) : (
               visibleProducts.map((product) => (
@@ -646,6 +777,75 @@ export default function PosOrderPage() {
               ))
             )}
           </div>
+
+          {showAddProduct && (
+            <div className="new-customer-panel">
+              <h3>Add Product</h3>
+              <div className="new-customer-grid">
+                <input
+                  className="form-input"
+                  placeholder="Product name"
+                  value={newProduct.name}
+                  onChange={(event) =>
+                    setNewProduct((current) => ({ ...current, name: event.target.value }))
+                  }
+                />
+                <input
+                  className="form-input"
+                  placeholder="Service"
+                  value={newProduct.service}
+                  onChange={(event) =>
+                    setNewProduct((current) => ({ ...current, service: event.target.value }))
+                  }
+                />
+                <input
+                  className="form-input"
+                  placeholder="Category"
+                  value={newProduct.category}
+                  onChange={(event) =>
+                    setNewProduct((current) => ({ ...current, category: event.target.value }))
+                  }
+                />
+                <input
+                  className="form-input"
+                  placeholder="Unit (e.g. Nos, Kg)"
+                  value={newProduct.unit}
+                  onChange={(event) =>
+                    setNewProduct((current) => ({ ...current, unit: event.target.value }))
+                  }
+                />
+                <input
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Price"
+                  value={newProduct.price}
+                  onChange={(event) =>
+                    setNewProduct((current) => ({ ...current, price: event.target.value }))
+                  }
+                />
+              </div>
+              <div className="new-customer-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowAddProduct(false)}
+                  disabled={creatingProduct}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleCreateProduct}
+                  disabled={creatingProduct}
+                >
+                  {creatingProduct ? "Saving..." : "Save Product"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <aside className="pos-cart">
