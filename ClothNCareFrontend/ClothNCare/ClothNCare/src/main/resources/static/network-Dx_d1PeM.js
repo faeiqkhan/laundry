@@ -1,1 +1,0 @@
-var e=()=>{let e=new URLSearchParams(window.location.search).get(`lanUrl`);return e?(localStorage.setItem(`lanUrl`,e),e):localStorage.getItem(`lanUrl`)??window.location.origin};export{e as t};
