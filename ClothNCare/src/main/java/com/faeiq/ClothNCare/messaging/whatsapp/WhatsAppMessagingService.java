@@ -43,6 +43,52 @@ public class WhatsAppMessagingService {
         return settings != null && settings.isWhatsAppEnabled();
     }
 
+    /**
+     * Cached connection status. The Node WhatsApp service is called over HTTP
+     * with a multi-second timeout; without a cache, every status poll blocks a
+     * Tomcat worker for the full read timeout when that service is down, which
+     * makes the whole app appear to hang. The cache is invalidated whenever
+     * connect/reconnect/logout run or settings change.
+     */
+    private volatile WhatsAppConnectionStatus cachedStatus;
+    private volatile long cachedStatusAt = 0;
+    private static final long STATUS_CACHE_TTL_MS = 10_000;
+
+    public void invalidateStatusCache() {
+        cachedStatus = null;
+        cachedStatusAt = 0;
+    }
+
+    public WhatsAppConnectionStatus connectionStatus() {
+        long millis = System.currentTimeMillis();
+        WhatsAppConnectionStatus cached = cachedStatus;
+        if (cached != null && millis - cachedStatusAt < STATUS_CACHE_TTL_MS) {
+            return cached;
+        }
+        WhatsAppConnectionStatus fresh = computeConnectionStatus();
+        cachedStatus = fresh;
+        cachedStatusAt = millis;
+        return fresh;
+    }
+
+    private WhatsAppConnectionStatus computeConnectionStatus() {
+        WhatsAppProvider provider = activeProvider();
+        if (provider == null) {
+            WhatsAppConnectionStatus status = WhatsAppConnectionStatus.of(WhatsAppProviderState.NOT_CONFIGURED);
+            status.setMessage("No WhatsApp provider is registered");
+            return status;
+        }
+        WhatsAppConnectionStatus status = provider.status();
+        status.setConfigured(provider.isConfigured());
+        status.setConnected(status.getState() == WhatsAppProviderState.CONNECTED && provider.isHealthy());
+        if (!provider.isHealthy()) {
+            status.setState(WhatsAppProviderState.OFFLINE);
+            status.setConnected(false);
+            status.setMessage("WhatsApp service is offline");
+        }
+        return status;
+    }
+
     public WhatsAppProvider activeProvider() {
         AppSettings settings = settingsRepository.findById(1L).orElse(null);
         String selected = settings != null && settings.getWhatsAppProvider() != null
@@ -141,6 +187,7 @@ public class WhatsAppMessagingService {
     @Transactional
     public WhatsAppDeliveryResult sendManual(WhatsAppMessageRequest request) {
         AppSettings settings = settingsRepository.findById(1L).orElse(null);
+        invalidateStatusCache();
         if (settings == null || !settings.isWhatsAppEnabled()) {
             return result(false, null, WhatsAppMessageStatus.SKIPPED, null, null,
                     "WhatsApp is disabled in settings", false, null, null);
@@ -162,6 +209,7 @@ public class WhatsAppMessagingService {
      */
     @Transactional
     public WhatsAppDeliveryResult sendInvoiceDocument(WhatsAppDocumentRequest request, AppSettings settings) {
+        invalidateStatusCache();
         if (settings == null || !settings.isWhatsAppEnabled()) {
             return result(false, null, WhatsAppMessageStatus.SKIPPED, null, null,
                     "WhatsApp is disabled in settings", false, null, null);
@@ -229,29 +277,12 @@ public class WhatsAppMessagingService {
                 request.getOrderId(), request.getInvoiceId());
     }
 
-    public WhatsAppConnectionStatus connectionStatus() {
-        WhatsAppProvider provider = activeProvider();
-        if (provider == null) {
-            WhatsAppConnectionStatus status = WhatsAppConnectionStatus.of(WhatsAppProviderState.NOT_CONFIGURED);
-            status.setMessage("No WhatsApp provider is registered");
-            return status;
-        }
-        WhatsAppConnectionStatus status = provider.status();
-        status.setConfigured(provider.isConfigured());
-        status.setConnected(status.getState() == WhatsAppProviderState.CONNECTED && provider.isHealthy());
-        if (!provider.isHealthy()) {
-            status.setState(WhatsAppProviderState.OFFLINE);
-            status.setConnected(false);
-            status.setMessage("WhatsApp service is offline");
-        }
-        return status;
-    }
-
     public void connect() {
         WhatsAppProvider provider = activeProvider();
         if (provider != null) {
             provider.connect();
         }
+        invalidateStatusCache();
     }
 
     public void reconnect() {
@@ -259,6 +290,7 @@ public class WhatsAppMessagingService {
         if (provider != null) {
             provider.reconnect();
         }
+        invalidateStatusCache();
     }
 
     public void logout() {
@@ -266,6 +298,7 @@ public class WhatsAppMessagingService {
         if (provider != null) {
             provider.logout();
         }
+        invalidateStatusCache();
     }
 
     @Transactional

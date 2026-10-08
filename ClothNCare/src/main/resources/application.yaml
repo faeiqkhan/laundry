@@ -1,18 +1,26 @@
 spring:
   datasource:
-    url: jdbc:sqlite:file:./data/clothncare.db?foreign_keys=on
+    url: jdbc:sqlite:file:./data/clothncare.db?foreign_keys=on&journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL
     driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
 
   jpa:
     database-platform: org.hibernate.community.dialect.SQLiteDialect
     hibernate:
       ddl-auto: update
-    show-sql: true
     properties:
       hibernate:
-        format_sql: true
+        jdbc:
+          batch_size: 50
   application:
     name: ClothNCare
+
+server:
+  tomcat:
+    threads:
+      max: 100
 
 # Secret must be at least 32 chars. Set the JWT_SECRET_KEY environment
 # variable when running (never commit a real secret to the repository).
@@ -27,8 +35,8 @@ whatsapp:
   default-country: ${WHATSAPP_DEFAULT_COUNTRY:IN}
   max-retries: ${WHATSAPP_MAX_RETRIES:3}
   delivery-poll-interval-ms: ${WHATSAPP_DELIVERY_POLL_INTERVAL_MS:30000}
-  connect-timeout-ms: ${WHATSAPP_CONNECT_TIMEOUT_MS:5000}
-  read-timeout-ms: ${WHATSAPP_READ_TIMEOUT_MS:20000}
+  connect-timeout-ms: ${WHATSAPP_CONNECT_TIMEOUT_MS:3000}
+  read-timeout-ms: ${WHATSAPP_READ_TIMEOUT_MS:10000}
 
 migration:
   swash-data-dir: ${MIGRATION_SWASH_DATA_DIR:./swash-data}

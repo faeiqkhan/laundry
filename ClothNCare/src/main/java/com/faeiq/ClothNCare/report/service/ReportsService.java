@@ -38,12 +38,14 @@ public class ReportsService {
         LocalDateTime startTime = start.atStartOfDay();
         LocalDateTime endTime = end.plusDays(1).atStartOfDay();
 
-        List<Orders> orders = ordersRepository.findAll().stream()
+        // Load all orders once and derive both the date range slice and the
+        // "allOrders" view from it (was two separate findAll scans).
+        List<Orders> allOrders = ordersRepository.findAll();
+        List<Orders> orders = allOrders.stream()
                 .filter(o -> o.getCreated_at() != null)
                 .filter(o -> !o.getCreated_at().isBefore(startTime) && o.getCreated_at().isBefore(endTime))
                 .toList();
 
-        List<Orders> allOrders = ordersRepository.findAll();
         List<Expense> expenses = expenseRepository.findByExpenseDateBetween(start, end);
 
         BigDecimal totalRevenue = orders.stream()
@@ -95,24 +97,22 @@ public class ReportsService {
                 ));
 
         Map<String, BigDecimal> customerTotals = new LinkedHashMap<>();
+        Map<String, long[]> customerCounts = new java.util.HashMap<>();
+        Map<String, String> customerNames = new java.util.HashMap<>();
         for (Orders order : allOrders) {
             if (order.getCustomer() == null || order.getTotal_price() == null) {
                 continue;
             }
-            String key = order.getCustomer().getName() + "|" + order.getCustomer().getId();
-            customerTotals.merge(key, order.getTotal_price(), BigDecimal::add);
+            String customerId = order.getCustomer().getId();
+            customerTotals.merge(customerId, order.getTotal_price(), BigDecimal::add);
+            customerCounts.computeIfAbsent(customerId, k -> new long[1])[0]++;
+            customerNames.putIfAbsent(customerId,
+                    order.getCustomer().getName() == null ? "Unknown" : order.getCustomer().getName());
         }
 
         List<ReportsDTO.TopCustomer> topCustomers = customerTotals.entrySet().stream()
-                .map(e -> {
-                    String[] parts = e.getKey().split("\\|");
-                    String name = parts[0];
-                    String customerId = parts[1];
-                    long orderCount = allOrders.stream()
-                            .filter(o -> o.getCustomer() != null && o.getCustomer().getId().equals(customerId))
-                            .count();
-                    return new ReportsDTO.TopCustomer(name, "", orderCount, e.getValue());
-                })
+                .map(e -> new ReportsDTO.TopCustomer(
+                        customerNames.get(e.getKey()), "", customerCounts.get(e.getKey())[0], e.getValue()))
                 .sorted(Comparator.comparing(ReportsDTO.TopCustomer::getTotalSpent).reversed())
                 .limit(10)
                 .toList();

@@ -3,6 +3,7 @@ package com.faeiq.ClothNCare.orders.entity;
 import com.faeiq.ClothNCare.customer.entity.Customer;
 import com.faeiq.ClothNCare.user.entity.Users;
 import jakarta.persistence.*;
+import jakarta.persistence.Table;
 import lombok.Data;
 import org.hibernate.annotations.BatchSize;
 
@@ -12,6 +13,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
+@Table(indexes = {
+        @Index(name = "idx_orders_status", columnList = "status"),
+        @Index(name = "idx_orders_created_at", columnList = "created_at"),
+        @Index(name = "idx_orders_invoice_number", columnList = "invoice_number"),
+        @Index(name = "idx_orders_customer", columnList = "customer_id")
+})
 @Data
 public class Orders {
 

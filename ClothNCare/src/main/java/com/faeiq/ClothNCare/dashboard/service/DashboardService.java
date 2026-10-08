@@ -178,6 +178,12 @@ public class DashboardService {
 
         List<OrdersItems> allItems = ordersItemsRepository.findAll();
 
+        // Pre-group by day once instead of filtering the full list per day
+        Map<LocalDate, List<Orders>> ordersByDay = orders.stream()
+                .collect(Collectors.groupingBy(o -> o.getCreated_at().toLocalDate()));
+        Map<LocalDate, List<Payment>> paymentsByDay = payments.stream()
+                .collect(Collectors.groupingBy(p -> p.getPaidAt().toLocalDate()));
+
         double totalRevenue = sumOrderRevenue(orders);
         double totalPaid = payments.stream()
                 .filter(p -> p.getAmount() != null)
@@ -218,20 +224,15 @@ public class DashboardService {
         DateTimeFormatter dayFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         List<AnalyticalDTO.DailyPoint> dailyRevenue = new ArrayList<>();
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
-            LocalDate day = date;
-            double revenue = orders.stream()
-                    .filter(o -> o.getCreated_at().toLocalDate().equals(day))
+            double revenue = ordersByDay.getOrDefault(date, List.of()).stream()
                     .filter(o -> o.getTotal_price() != null)
                     .mapToDouble(o -> o.getTotal_price().doubleValue())
                     .sum();
-            long dayOrders = orders.stream()
-                    .filter(o -> o.getCreated_at().toLocalDate().equals(day))
-                    .count();
-            double dayPaid = payments.stream()
-                    .filter(p -> p.getPaidAt().toLocalDate().equals(day))
+            long dayOrders = ordersByDay.getOrDefault(date, List.of()).size();
+            double dayPaid = paymentsByDay.getOrDefault(date, List.of()).stream()
                     .mapToDouble(p -> p.getAmount() == null ? 0 : p.getAmount().doubleValue())
                     .sum();
-            dailyRevenue.add(new AnalyticalDTO.DailyPoint(day.format(dayFmt), revenue, dayOrders, dayPaid));
+            dailyRevenue.add(new AnalyticalDTO.DailyPoint(date.format(dayFmt), revenue, dayOrders, dayPaid));
         }
 
         Map<String, Double> expenseByCategory = expenses.stream()
@@ -247,31 +248,27 @@ public class DashboardService {
                 .toList();
 
         Map<String, Double> customerTotals = new LinkedHashMap<>();
+        Map<String, long[]> customerCounts = new HashMap<>();
+        Map<String, String[]> customerInfo = new HashMap<>();
         for (Orders order : orders) {
             if (order.getCustomer() == null || order.getTotal_price() == null) {
                 continue;
             }
-            String key = order.getCustomer().getId();
-            customerTotals.merge(key, order.getTotal_price().doubleValue(), Double::sum);
+            String customerId = order.getCustomer().getId();
+            customerTotals.merge(customerId, order.getTotal_price().doubleValue(), Double::sum);
+            customerCounts.computeIfAbsent(customerId, k -> new long[1])[0]++;
+            customerInfo.computeIfAbsent(customerId, k -> new String[]{
+                    order.getCustomer().getName() == null ? "Unknown" : order.getCustomer().getName(),
+                    order.getCustomer().getPhone() == null ? "" : order.getCustomer().getPhone()
+            });
         }
 
         List<AnalyticalDTO.TopCustomer> topCustomers = customerTotals.entrySet().stream()
-                .map(e -> {
-                    String customerId = e.getKey();
-                    long orderCount = orders.stream()
-                            .filter(o -> o.getCustomer() != null && o.getCustomer().getId().equals(customerId))
-                            .count();
-                    var customer = orders.stream()
-                            .map(Orders::getCustomer)
-                            .filter(Objects::nonNull)
-                            .filter(c -> c.getId().equals(customerId))
-                            .findFirst().orElse(null);
-                    return new AnalyticalDTO.TopCustomer(
-                            customer != null ? customer.getName() : "Unknown",
-                            customer != null && customer.getPhone() != null ? customer.getPhone() : "",
-                            orderCount,
-                            e.getValue());
-                })
+                .map(e -> new AnalyticalDTO.TopCustomer(
+                        customerInfo.get(e.getKey())[0],
+                        customerInfo.get(e.getKey())[1],
+                        customerCounts.get(e.getKey())[0],
+                        e.getValue()))
                 .sorted(Comparator.comparingDouble(AnalyticalDTO.TopCustomer::getTotalSpent).reversed())
                 .limit(10)
                 .toList();
@@ -307,6 +304,17 @@ public class DashboardService {
                 .filter(e -> e.getExpenseDate() != null && e.getExpenseDate().getYear() == year)
                 .toList();
 
+        // Pre-group by month instead of re-filtering per month
+        Map<Integer, List<Orders>> ordersByMonth = orders.stream()
+                .collect(Collectors.groupingBy(o -> o.getCreated_at().getMonthValue()));
+        Map<Integer, List<Payment>> paymentsByMonth = payments.stream()
+                .collect(Collectors.groupingBy(p -> p.getPaidAt().getMonthValue()));
+        Map<Integer, List<Expense>> expensesByMonth = new HashMap<>();
+        for (Expense expense : expenses) {
+            expensesByMonth.computeIfAbsent(expense.getExpenseDate().getMonthValue(), k -> new ArrayList<>())
+                    .add(expense);
+        }
+
         String[] monthNames = {"January", "February", "March", "April", "May", "June",
                 "July", "August", "September", "October", "November", "December"};
 
@@ -314,27 +322,21 @@ public class DashboardService {
         double bestMonthRevenue = 0;
         String bestMonthName = "-";
         for (int m = 1; m <= 12; m++) {
-            int month = m;
-            double revenue = orders.stream()
-                    .filter(o -> o.getCreated_at().getMonthValue() == month)
+            double revenue = ordersByMonth.getOrDefault(m, List.of()).stream()
                     .filter(o -> o.getTotal_price() != null)
                     .mapToDouble(o -> o.getTotal_price().doubleValue())
                     .sum();
-            double paid = payments.stream()
-                    .filter(p -> p.getPaidAt().getMonthValue() == month)
+            double paid = paymentsByMonth.getOrDefault(m, List.of()).stream()
                     .mapToDouble(p -> p.getAmount() == null ? 0 : p.getAmount().doubleValue())
                     .sum();
-            double exp = expenses.stream()
-                    .filter(e -> e.getExpenseDate().getMonthValue() == month)
+            double exp = expensesByMonth.getOrDefault(m, List.of()).stream()
                     .mapToDouble(e -> e.getAmount() == null ? 0 : e.getAmount().doubleValue())
                     .sum();
-            long count = orders.stream()
-                    .filter(o -> o.getCreated_at().getMonthValue() == month)
-                    .count();
-            months.add(new YearlyDTO.MonthPoint(month, monthNames[month - 1], revenue, paid, exp, count));
+            long count = ordersByMonth.getOrDefault(m, List.of()).size();
+            months.add(new YearlyDTO.MonthPoint(m, monthNames[m - 1], revenue, paid, exp, count));
             if (revenue > bestMonthRevenue) {
                 bestMonthRevenue = revenue;
-                bestMonthName = monthNames[month - 1];
+                bestMonthName = monthNames[m - 1];
             }
         }
 

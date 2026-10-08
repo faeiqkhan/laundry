@@ -45,7 +45,7 @@ export default function WhatsAppConnectionCard() {
 
   useEffect(() => {
     refresh();
-    pollTimer.current = setInterval(refresh, 5000);
+    pollTimer.current = setInterval(refresh, 15000);
     return () => {
       if (pollTimer.current) clearInterval(pollTimer.current);
     };
