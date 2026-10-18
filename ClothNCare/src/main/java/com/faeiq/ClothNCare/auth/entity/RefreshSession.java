@@ -11,6 +11,8 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Data;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "refresh_sessions")
 @Data
@@ -21,6 +23,11 @@ public class RefreshSession {
     private String id;
 
     private String tokenHash;
+
+    // Absolute expiry of this refresh session. Rows created before this
+    // column existed have NULL and are treated as expired. (Column name
+    // maps to expires_at via the default naming strategy.)
+    private Instant expiresAt;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)

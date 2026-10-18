@@ -5,6 +5,7 @@ import com.faeiq.ClothNCare.user.entity.Users;
 import com.faeiq.ClothNCare.user.repository.UsersRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,13 @@ public class AdminBootstrap implements CommandLineRunner {
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
 
+    // First-run admin credentials can be overridden without a code change.
+    @Value("${app.admin.email:Khnaf@gmail.com}")
+    private String adminEmail;
+
+    @Value("${app.admin.password:Admin@12345}")
+    private String adminPassword;
+
     @Override
     public void run(String... args) {
         boolean hasAdmin = usersRepository.findAll().stream()
@@ -29,11 +37,15 @@ public class AdminBootstrap implements CommandLineRunner {
 
         Users admin = new Users();
         admin.setName("Store Admin");
-        admin.setEmail("Khnaf@gmail.com");
-        admin.setPassword(encoder.encode("Admin@12345"));
+        admin.setEmail(adminEmail);
+        admin.setPassword(encoder.encode(adminPassword));
         admin.setRole(Role.ADMIN);
 
         usersRepository.save(admin);
-        log.info("Default admin account created (Khnaf@gmail.com). Change the password after first login if desired.");
+        log.info("Admin account created ({}). Change the password after first login.", adminEmail);
+        if ("Admin@12345".equals(adminPassword)) {
+            log.warn("Running with the built-in default admin password. Set APP_ADMIN_PASSWORD "
+                    + "(env var) to override, and change the password inside the app after first login.");
+        }
     }
 }

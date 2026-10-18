@@ -2,12 +2,14 @@ package com.faeiq.ClothNCare.common.exception;
 
 import com.faeiq.ClothNCare.common.ApiResponse;
 import com.faeiq.ClothNCare.common.ApiResponseUtil;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -75,6 +77,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception ex) {
+        // Keep the generic response for users, but log the real cause so
+        // server-side errors are observable.
+        log.error("Unhandled server error", ex);
         return error(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected server error");
     }
 

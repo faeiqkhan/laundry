@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +34,9 @@ public class AuthService {
     private final RefreshSessionRepository refreshSessionRepository;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
     private final SecureRandom secureRandom = new SecureRandom();
+
+    // Refresh sessions live 30 days; expired sessions are purged on login.
+    private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(30);
 
     @Transactional
     public void register(RegisterDTO registerDTO) {
@@ -59,17 +64,19 @@ public class AuthService {
         Users user = usersRepository.findByEmail(loginDTO.getEmail());
 
         if (user == null) {
-            throw new ResourceNotFoundException("User not found");
+            // Same message as a wrong password so login cannot reveal
+            // which emails exist (user enumeration).
+            throw new UnauthorizedException("Invalid email or password");
         }
 
         if (!encoder.matches(loginDTO.getPassword(), user.getPassword())) {
-            throw new UnauthorizedException("Invalid credentials");
+            throw new UnauthorizedException("Invalid email or password");
         }
 
         return new AuthResponseDTO(jwtUtil.generateToken(user), createRefreshToken(user));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponseDTO refresh(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new UnauthorizedException("Refresh token is required");
@@ -77,8 +84,21 @@ public class AuthService {
 
         RefreshSession session = refreshSessionRepository.findByTokenHash(hash(refreshToken))
                 .orElseThrow(() -> new UnauthorizedException("Refresh session is invalid"));
+
+        Instant now = Instant.now();
+        if (session.getExpiresAt() == null || session.getExpiresAt().isBefore(now)) {
+            // Legacy pre-expiry sessions and expired sessions are revoked.
+            refreshSessionRepository.delete(session);
+            throw new UnauthorizedException("Refresh session is invalid");
+        }
+
         Users user = session.getUser();
-        return new AuthResponseDTO(jwtUtil.generateToken(user), refreshToken);
+        // Rotate: consume the presented token, keeping a short grace window
+        // so pages that share localStorage and refresh concurrently with the
+        // same token are not logged out.
+        session.setExpiresAt(now.plusSeconds(60));
+        refreshSessionRepository.save(session);
+        return new AuthResponseDTO(jwtUtil.generateToken(user), createRefreshToken(user));
     }
 
     @Transactional
@@ -93,9 +113,13 @@ public class AuthService {
         secureRandom.nextBytes(bytes);
         String refreshToken = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
+        // Opportunistic cleanup so expired sessions do not accumulate forever.
+        refreshSessionRepository.deleteByExpiresAtBefore(Instant.now().minusSeconds(3600));
+
         RefreshSession session = new RefreshSession();
         session.setTokenHash(hash(refreshToken));
         session.setUser(user);
+        session.setExpiresAt(Instant.now().plus(REFRESH_TOKEN_TTL));
         refreshSessionRepository.save(session);
         return refreshToken;
     }
