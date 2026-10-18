@@ -13,6 +13,7 @@ import com.faeiq.ClothNCare.user.entity.Role;
 import com.faeiq.ClothNCare.user.entity.Users;
 import com.faeiq.ClothNCare.user.repository.UsersRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,8 +36,15 @@ public class AuthService {
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
     private final SecureRandom secureRandom = new SecureRandom();
 
-    // Refresh sessions live 30 days; expired sessions are purged on login.
-    private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(30);
+    // The store must stay signed in indefinitely; refresh sessions rest in
+    // the local DB and keep working across app/browser restarts. TTL is
+    // configurable in days and defaults to ~10 years (effectively never).
+    @Value("${app.refresh-ttl-days:3650}")
+    private int refreshTtlDays;
+
+    private Duration refreshTtl() {
+        return Duration.ofDays(refreshTtlDays);
+    }
 
     @Transactional
     public void register(RegisterDTO registerDTO) {
@@ -86,8 +94,12 @@ public class AuthService {
                 .orElseThrow(() -> new UnauthorizedException("Refresh session is invalid"));
 
         Instant now = Instant.now();
-        if (session.getExpiresAt() == null || session.getExpiresAt().isBefore(now)) {
-            // Legacy pre-expiry sessions and expired sessions are revoked.
+        if (session.getExpiresAt() == null) {
+            // Legacy rows created before the expiry column existed: grant a
+            // full window instead of logging the user out after the update.
+            session.setExpiresAt(now.plus(refreshTtl()));
+            refreshSessionRepository.save(session);
+        } else if (session.getExpiresAt().isBefore(now)) {
             refreshSessionRepository.delete(session);
             throw new UnauthorizedException("Refresh session is invalid");
         }
@@ -119,7 +131,7 @@ public class AuthService {
         RefreshSession session = new RefreshSession();
         session.setTokenHash(hash(refreshToken));
         session.setUser(user);
-        session.setExpiresAt(Instant.now().plus(REFRESH_TOKEN_TTL));
+        session.setExpiresAt(Instant.now().plus(refreshTtl()));
         refreshSessionRepository.save(session);
         return refreshToken;
     }
