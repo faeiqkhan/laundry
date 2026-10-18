@@ -36,6 +36,8 @@ import java.nio.file.Path;
 import java.time.format.DateTimeFormatter;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import com.google.zxing.BarcodeFormat;
@@ -99,6 +101,10 @@ public class InvoiceService {
     private final OrdersRepository ordersRepository;
     private final SettingsService settingsService;
 
+    // Existence of invoices/{file} is checked for every order row shown in
+    // lists; cache it so list screens don't hammer the disk on every request.
+    private final Map<String, Boolean> invoiceExistenceCache = new ConcurrentHashMap<>();
+
     @Transactional(readOnly = true)
     public InvoiceResponseDTO generateInvoice(String orderId) {
         Orders order = ordersRepository.findById(orderId)
@@ -122,6 +128,7 @@ public class InvoiceService {
 
             document.close();
 
+            invoiceExistenceCache.put(order.getId(), true);
             return new InvoiceResponseDTO(getInvoiceUrl(order.getId()));
         } catch (Exception e) {
             throw new InvoiceGenerationException("Error generating invoice", e);
@@ -392,7 +399,8 @@ public class InvoiceService {
     }
 
     public boolean invoiceExists(String orderId) {
-        return Files.exists(Path.of(INVOICE_DIR + getInvoiceFileName(orderId)));
+        return invoiceExistenceCache.computeIfAbsent(orderId,
+                id -> Files.exists(Path.of(INVOICE_DIR + getInvoiceFileName(id))));
     }
 
     public String getAvailableInvoiceUrl(String orderId) {
@@ -403,6 +411,7 @@ public class InvoiceService {
         try {
             Path file = Path.of(INVOICE_DIR + getInvoiceFileName(orderId));
             Files.deleteIfExists(file);
+            invoiceExistenceCache.remove(orderId);
         } catch (IOException e) {
             throw new InvoiceGenerationException("Error deleting invoice", e);
         }

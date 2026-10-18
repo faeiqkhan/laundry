@@ -6,6 +6,7 @@ import com.faeiq.ClothNCare.orders.repository.OrdersRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Component
+@Lazy(false)  // scheduled tasks must start at boot, not on first use
 @RequiredArgsConstructor
 public class WhatsAppScheduler {
 

@@ -100,6 +100,6 @@ if defined LAN_IP (
 )
 echo   - Close this window to stop the app.
 echo.
-"%JAVA_EXE%" -jar ClothNCare.jar
+"%JAVA_EXE%" -Xms64m -Xmx512m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:+ExitOnOutOfMemoryError -Dfile.encoding=UTF-8 -jar ClothNCare.jar
 
 pause

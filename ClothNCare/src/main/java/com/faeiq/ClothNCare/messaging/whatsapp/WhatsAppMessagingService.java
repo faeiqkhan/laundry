@@ -5,6 +5,7 @@ import com.faeiq.ClothNCare.settings.entity.AppSettings;
 import com.faeiq.ClothNCare.settings.repository.AppSettingsRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ import java.util.List;
  * explicit manual sends (invoice documents, ad-hoc messages) synchronously.
  */
 @Service
+@Lazy(false)  // owns the @Scheduled delivery poll; must be eager
 public class WhatsAppMessagingService {
 
     private static final Logger log = LoggerFactory.getLogger(WhatsAppMessagingService.class);

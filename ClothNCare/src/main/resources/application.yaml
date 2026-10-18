@@ -1,13 +1,18 @@
 spring:
+  main:
+    lazy-initialization: true  # start fast on low-spec PCs; beans load on first use
   datasource:
     url: jdbc:sqlite:file:./data/clothncare.db?foreign_keys=on&journal_mode=WAL&busy_timeout=5000&synchronous=NORMAL
     driver-class-name: org.sqlite.JDBC
     hikari:
       maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 600000
       connection-timeout: 10000
 
   jpa:
     database-platform: org.hibernate.community.dialect.SQLiteDialect
+    open-in-view: false  # don't hold DB connections while rendering responses
     hibernate:
       ddl-auto: update
     properties:
@@ -20,7 +25,8 @@ spring:
 server:
   tomcat:
     threads:
-      max: 100
+      max: 25  # plenty for LAN use; keeps memory/CPU low on weak PCs
+      min-spare: 4
 
 # Secret must be at least 32 chars. Set the JWT_SECRET_KEY environment
 # variable when running (never commit a real secret to the repository).
