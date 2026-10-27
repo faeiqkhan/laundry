@@ -44,12 +44,12 @@ jobs:
 
       - name: Copy frontend build into backend static resources
         run: |
-          rm -rf ClothNCare/ClothNCare/src/main/resources/static/assets/*
-          rm -f ClothNCare/ClothNCare/src/main/resources/static/index.html
-          cp -r ClothNCareFrontend/cloth-n-care-ui/dist/* ClothNCare/ClothNCare/src/main/resources/static/
+          rm -rf ClothNCare/src/main/resources/static/assets/*
+          rm -f ClothNCare/src/main/resources/static/index.html
+          cp -r ClothNCareFrontend/cloth-n-care-ui/dist/* ClothNCare/src/main/resources/static/
 
       - name: Package backend (runs tests)
-        working-directory: ClothNCare/ClothNCare
+        working-directory: ClothNCare
         run: ./mvnw -B clean package
 
       - name: Install WhatsApp service dependencies
@@ -83,7 +83,7 @@ jobs:
       - name: Assemble release folder
         run: |
           mkdir -p release/data release/invoices
-          cp ClothNCare/ClothNCare/target/ClothNCare-*.jar release/ClothNCare.jar
+          cp ClothNCare/target/ClothNCare-*.jar release/ClothNCare.jar
           cp scripts/start.bat release/start.bat
           cp scripts/README-CLIENT.txt release/README-CLIENT.txt
           cp -r jre release/jre
